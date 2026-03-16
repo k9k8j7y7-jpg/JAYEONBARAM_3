@@ -111,7 +111,8 @@ const ProductList = ({ categorySlug, categoryName }: ProductListProps) => {
                                 transition={{ delay: index * 0.1 }}
                                 className="group cursor-pointer"
                             >
-                                <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-secondary mb-6">
+                                <Link href={`/shop/product/${product.id}`}>
+                                    <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-secondary mb-6">
                                     <Image
                                         src={product.image_url || "/images/placeholder.jpg"}
                                         alt={product.name}
@@ -128,17 +129,18 @@ const ProductList = ({ categorySlug, categoryName }: ProductListProps) => {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-lg font-bold text-brand-text group-hover:text-brand-primary transition-colors">
-                                        {product.name}
-                                    </h3>
-                                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
-                                        {product.description}
-                                    </p>
-                                    <p className="text-lg font-serif font-bold text-brand-primary pt-1">
-                                        ₩ {product.price.toLocaleString()}
-                                    </p>
-                                </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-bold text-brand-text group-hover:text-brand-primary transition-colors">
+                                            {product.name}
+                                        </h3>
+                                        <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
+                                            {product.description}
+                                        </p>
+                                        <p className="text-lg font-serif font-bold text-brand-primary pt-1">
+                                            ₩ {product.price.toLocaleString()}
+                                        </p>
+                                    </div>
+                                </Link>
                             </motion.div>
                         ))}
                     </motion.div>
