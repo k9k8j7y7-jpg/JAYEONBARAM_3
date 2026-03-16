@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-primary: #0A3D2E;
+  --color-brand-secondary: #F0F4F8;
+  --color-brand-text: #1A1A1A;
+
+  --font-serif: "Noto Serif KR", serif;
+  --font-sans: "Pretendard", "Inter", sans-serif;
+}
+
+:root {
+  --background: #FFFFFF;
+  --foreground: #1A1A1A;
+  --primary: #0A3D2E;
+  --secondary: #F0F4F8;
+
+  --brand-primary: #0A3D2E;
+  --brand-secondary: #F0F4F8;
+  --brand-text: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-[#1A1A1A] font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-serif;
+  }
+}
+
+.glass-morphism {
+  @apply bg-white/70 backdrop-blur-md border border-white/20;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-primary to-green-700;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--brand-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(10, 61, 46, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 61, 46, 0.5);
+}
+
+/* Animations */
+@keyframes fluid-breeze {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(5px, -5px) scale(1.02);
+  }
+
+  66% {
+    transform: translate(-5px, 5px) scale(0.98);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.animate-breeze {
+  animation: fluid-breeze 10s ease-in-out infinite;
+}
