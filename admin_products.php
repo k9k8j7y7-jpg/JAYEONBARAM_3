@@ -1,9 +1,10 @@
 <?php
-$host = 'localhost';
-$db   = 'jayeonbaram';
-$user = 'root';
-$pass = '';
-$charset = 'utf8mb4';
+$config = require 'db_config.php';
+$host = $config['host'];
+$db   = $config['db'];
+$user = $config['user'];
+$pass = $config['pass'];
+$charset = $config['charset'];
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 try {

@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# credentials & sensitive files
+db_config.php
+AWS.txt
+fix_korean.sql
+init_db.sql
+extend_db.sql
+insert_products.sql
+scp_test.txt
+scp_web_test.txt
