@@ -1,4 +1,9 @@
 <?php
+session_start();
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: admin/login.php');
+    exit;
+}
 $config = require 'db_config.php';
 $host = $config['host'];
 $db   = $config['db'];
