@@ -5,7 +5,7 @@ header('Access-Control-Allow-Origin: *');
 $host = 'localhost';
 $db   = 'jayeonbaram';
 $user = 'root';
-$pass = 'Xi!R:yFGC4N6';
+$pass = '';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";

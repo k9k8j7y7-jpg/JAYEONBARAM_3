@@ -22,9 +22,9 @@ interface ProductDetail {
     usage_guide: string;
     ingredients: string;
     main_features: string;
+    detail_image: string | null;
+    usage_image: string | null;
     images: ImageItem[];
-    detail_image_url?: string;
-    usage_image_url?: string;
 }
 
 const ProductDetailPage = () => {
@@ -41,7 +41,7 @@ const ProductDetailPage = () => {
         const fetchProductDetail = async () => {
             if (!id) return;
             try {
-                const response = await fetch(`http://localhost:8000/get_product_detail.php?id=${id}`);
+                const response = await fetch(`http://52.78.157.86/api/get_product_detail.php?id=${id}`);
                 const data = await response.json();
                 setProduct(data);
                 setSelectedImage(data.image_url);
@@ -243,45 +243,33 @@ const ProductDetailPage = () => {
                             >
                                 {activeTab === "info" && (
                                     <div className="space-y-8">
-                                        <div className="bg-brand-secondary/30 p-10 rounded-3xl">
-                                            <h4 className="text-xl font-bold text-brand-primary mb-6">주요 특징</h4>
-                                            <p className="text-gray-600 italic leading-relaxed">
+                                        <div className="bg-brand-secondary/30 p-10 rounded-3xl text-center">
+                                            <h4 className="text-xl font-bold text-brand-primary mb-6 text-left">주요 특징</h4>
+                                            <p className="text-gray-600 italic leading-relaxed text-left mb-8">
                                                 "{product.main_features}"
                                             </p>
+                                            {product.detail_image && (
+                                                <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden mb-8">
+                                                    <Image src={product.detail_image} alt="Detail" fill className="object-cover" unoptimized />
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="whitespace-pre-line text-lg">
                                             {product.full_description}
                                         </div>
-                                        {product.detail_image_url && (
-                                            <div className="mt-12 relative w-full aspect-[4/5] rounded-3xl overflow-hidden bg-brand-secondary">
-                                                <Image 
-                                                    src={product.detail_image_url} 
-                                                    alt="Detail Image" 
-                                                    fill 
-                                                    className="object-cover"
-                                                    unoptimized
-                                                />
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                                 {activeTab === "usage" && (
                                     <div className="bg-white border border-gray-100 p-10 rounded-3xl shadow-sm">
-                                        <h4 className="text-xl font-bold text-brand-primary mb-6">USAGE GUIDE</h4>
+                                        <h4 className="text-xl font-bold text-brand-primary mb-6 uppercase">USAGE GUIDE</h4>
+                                        {product.usage_image && (
+                                            <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden mb-8">
+                                                <Image src={product.usage_image} alt="Usage Guide" fill className="object-cover" unoptimized />
+                                            </div>
+                                        )}
                                         <div className="text-lg leading-relaxed">
                                             {product.usage_guide}
                                         </div>
-                                        {product.usage_image_url && (
-                                            <div className="mt-12 relative w-full aspect-video rounded-3xl overflow-hidden bg-brand-secondary">
-                                                <Image 
-                                                    src={product.usage_image_url} 
-                                                    alt="Usage Guide Image" 
-                                                    fill 
-                                                    className="object-cover"
-                                                    unoptimized
-                                                />
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                                 {activeTab === "ingredients" && (

@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# 1. /shop/product/1 처럼 들어왔을 때 /shop/product/1.html 을 찾아서 보여줌
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
+# 2. 만약 파일이 없으면 index.html로 보내서 Next.js 클라이언트 라우팅이 처리하게 함 (SPA 방식)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /index.html [L]

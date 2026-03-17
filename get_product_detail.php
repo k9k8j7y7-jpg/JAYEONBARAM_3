@@ -5,7 +5,7 @@ header('Access-Control-Allow-Origin: *');
 $host = 'localhost';
 $db   = 'jayeonbaram';
 $user = 'root';
-$pass = 'Xi!R:yFGC4N6';
+$pass = '';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
@@ -33,7 +33,7 @@ if ($id <= 0) {
 
 // 1. 제품 기본 정보 및 상세 정보 JOIN 하여 가져오기
 $stmt = $pdo->prepare("
-    SELECT p.*, d.full_description, d.usage_guide, d.ingredients, d.main_features
+    SELECT p.*, d.full_description, d.usage_guide, d.ingredients, d.main_features, d.detail_image_url, d.usage_image_url
     FROM products p
     LEFT JOIN product_details d ON p.id = d.product_id
     WHERE p.id = ?

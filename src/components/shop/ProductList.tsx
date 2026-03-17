@@ -28,8 +28,8 @@ const ProductList = ({ categorySlug, categoryName }: ProductListProps) => {
         const fetchProducts = async () => {
             setLoading(true);
             try {
-                // AWS 서버의 API 주소 사용
-                const response = await fetch(`http://52.78.157.86/api/get_products.php?category=${categorySlug}`);
+                // 로컬 개발 환경의 API 주소 사용
+                const response = await fetch(`http://localhost:8000/get_products.php?category=${categorySlug}`);
                 const data = await response.json();
                 setProducts(data);
             } catch (error) {

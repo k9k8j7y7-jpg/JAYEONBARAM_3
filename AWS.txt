@@ -1,0 +1,8 @@
+IP : 52.78.157.86
+User : bitnami
+Key : C:\Users\k9k8j\Downloads\SSHKey.pem
+/opt/bitnami/apache2/htdocs
+MySQL password : Xi!R:yFGC4N6
+
+
+
