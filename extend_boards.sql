@@ -1,0 +1,5 @@
+USE jayeonbaram;
+ALTER TABLE boards 
+ADD COLUMN product_id INT NULL,
+ADD COLUMN rating INT DEFAULT 5,
+ADD COLUMN image_url VARCHAR(255) NULL;
