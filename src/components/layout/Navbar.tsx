@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Instagram, ChevronDown } from "lucide-react";
+import { Menu, X, Instagram, ChevronDown, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -48,6 +48,10 @@ const NAV_DATA = [
 
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
 
@@ -63,12 +67,45 @@ const Navbar = () => {
             setIsScrolled(window.scrollY > 50);
         };
         
-        // Initial check
         handleScroll();
-
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, [isHomePage]);
+
+    // Step 2: 실시간 검색 로직 (Debounce 적용)
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (searchQuery.trim().length >= 2) {
+                setIsLoading(true);
+                try {
+                    const res = await fetch(`/admin_products.php?action=search&keyword=${encodeURIComponent(searchQuery)}`);
+                    const result = await res.json();
+                    if (result.success) {
+                        setSearchResults(result.data);
+                    }
+                } catch (error) {
+                    console.error("Search failed:", error);
+                } finally {
+                    setIsLoading(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // 검색어 강조 함수 (Step 3)
+    const highlightKeyword = (text: string, keyword: string) => {
+        if (!keyword.trim()) return text;
+        const parts = text.split(new RegExp(`(${keyword})`, 'gi'));
+        return parts.map((part, i) => 
+            part.toLowerCase() === keyword.toLowerCase() 
+                ? <span key={i} className="text-brand-primary font-bold">{part}</span> 
+                : part
+        );
+    };
 
     return (
         <nav
@@ -151,6 +188,15 @@ const Navbar = () => {
 
                 {/* Icons & Actions */}
                 <div className="hidden lg:flex items-center gap-6">
+                    <button 
+                        onClick={() => { setIsSearchOpen(!isSearchOpen); setIsOpen(false); }}
+                        className={cn(
+                            "p-2.5 rounded-full transition-all hover:scale-110",
+                            isScrolled ? "bg-brand-secondary/50 text-brand-primary hover:bg-brand-primary hover:text-white" : "bg-white/20 text-white backdrop-blur-md hover:bg-white/30"
+                        )}
+                    >
+                        <Search size={18} />
+                    </button>
                     <Link
                         href="https://www.instagram.com/naturia_life"
                         target="_blank"
@@ -172,12 +218,20 @@ const Navbar = () => {
                 </div>
 
                 {/* Mobile Toggle */}
-                <button 
-                    className={cn("lg:hidden p-2 rounded-xl transition-colors", isScrolled ? "text-brand-text hover:bg-brand-secondary" : "text-white hover:bg-white/10")} 
-                    onClick={() => setIsOpen(!isOpen)}
-                >
-                    {isOpen ? <X size={28} /> : <Menu size={28} />}
-                </button>
+                <div className="flex items-center gap-2 lg:hidden">
+                    <button 
+                        className={cn("p-2 rounded-xl transition-colors", isScrolled ? "text-brand-text hover:bg-brand-secondary" : "text-white hover:bg-white/10")} 
+                        onClick={() => { setIsSearchOpen(!isSearchOpen); setIsOpen(false); }}
+                    >
+                        <Search size={24} />
+                    </button>
+                    <button 
+                        className={cn("p-2 rounded-xl transition-colors", isScrolled ? "text-brand-text hover:bg-brand-secondary" : "text-white hover:bg-white/10")} 
+                        onClick={() => { setIsOpen(!isOpen); setIsSearchOpen(false); }}
+                    >
+                        {isOpen ? <X size={28} /> : <Menu size={28} />}
+                    </button>
+                </div>
             </div>
 
             {/* Mobile Menu */}
@@ -228,6 +282,106 @@ const Navbar = () => {
                                     <Instagram size={20} />
                                 </Link>
                             </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Search Overlay */}
+            <AnimatePresence>
+                {isSearchOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="absolute top-full left-0 right-0 min-h-[40vh] bg-white/95 backdrop-blur-xl border-t border-brand-secondary/50 shadow-2xl overflow-y-auto z-40"
+                    >
+                        <div className="max-w-4xl mx-auto px-6 pt-12 pb-16 flex flex-col">
+                            <div className="w-full relative shadow-sm hover:shadow-md transition-shadow duration-300 rounded-full">
+                                <Search size={24} className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-primary" />
+                                <input 
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && searchQuery.trim()) {
+                                            window.location.href = `/search?q=${encodeURIComponent(searchQuery)}`;
+                                            setIsSearchOpen(false);
+                                        }
+                                    }}
+                                    placeholder="찾으시는 제품명이나 효능을 입력해주세요."
+                                    className="w-full pl-16 pr-6 py-5 rounded-full border-2 border-brand-primary/20 focus:border-brand-primary bg-white text-brand-text text-lg outline-none transition-colors placeholder:text-gray-400"
+                                    autoFocus
+                                />
+                                {isLoading && (
+                                    <div className="absolute right-6 top-1/2 -translate-y-1/2">
+                                        <div className="w-5 h-5 border-2 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin"></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 실시간 검색 결과 (Step 3) */}
+                            <AnimatePresence mode="wait">
+                                {searchResults.length > 0 ? (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 10 }}
+                                        className="mt-6 bg-white rounded-3xl border border-brand-secondary overflow-hidden shadow-xl"
+                                    >
+                                        <div className="p-4 border-b border-brand-secondary bg-brand-secondary/30">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">검색 결과 ({searchResults.length})</span>
+                                        </div>
+                                        <div className="max-h-[40vh] overflow-y-auto">
+                                            {searchResults.map((item: any) => (
+                                                <Link 
+                                                    key={item.id}
+                                                    href={`/shop/detail/${item.id}`}
+                                                    onClick={() => setIsSearchOpen(false)}
+                                                    className="flex items-center gap-4 p-4 hover:bg-brand-secondary transition-colors group"
+                                                >
+                                                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-100">
+                                                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-bold text-brand-text line-clamp-1">{highlightKeyword(item.name, searchQuery)}</h4>
+                                                        <p className="text-sm text-gray-500 line-clamp-1 mt-0.5">{item.description}</p>
+                                                    </div>
+                                                    <div className="text-right flex-shrink-0">
+                                                        <span className="font-bold text-brand-primary">₩{Number(item.price).toLocaleString()}</span>
+                                                    </div>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                ) : searchQuery.length >= 2 && !isLoading ? (
+                                    <motion.div 
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        className="mt-12 text-center py-12"
+                                    >
+                                        <p className="text-gray-400 text-lg">"{searchQuery}"에 대한 검색 결과가 없습니다.</p>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div 
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        className="mt-8 flex flex-wrap gap-2 items-center text-sm"
+                                    >
+                                        <span className="font-bold text-brand-primary mr-3">인기 검색어</span>
+                                        {["트리트먼트", "두피스파", "스타일링", "웨이브펌"].map((tag) => (
+                                            <button 
+                                                key={tag}
+                                                onClick={() => setSearchQuery(tag)}
+                                                className="px-5 py-2 rounded-full border border-gray-200 text-brand-text bg-white hover:border-brand-primary hover:text-brand-primary hover:bg-brand-secondary/30 transition-colors"
+                                            >
+                                                {tag}
+                                            </button>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </motion.div>
                 )}

@@ -32,7 +32,7 @@ if (!$category_slug) {
 
 if ($category_slug === 'all') {
     $stmt = $pdo->query("SELECT * FROM products ORDER BY created_at DESC");
-    echo json_encode($stmt->fetchAll());
+    echo json_encode(['success' => true, 'data' => $stmt->fetchAll()]);
     exit;
 }
 
@@ -57,4 +57,4 @@ $stmt = $pdo->prepare("SELECT * FROM products WHERE category_id IN ($in_query) O
 $stmt->execute($category_ids);
 $products = $stmt->fetchAll();
 
-echo json_encode($products);
+echo json_encode(['success' => true, 'data' => $products]);

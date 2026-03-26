@@ -56,7 +56,7 @@ try {
         $products = $stmt->fetchAll();
     }
 
-    echo json_encode($products);
+    echo json_encode(['success' => true, 'data' => $products]);
 
 } catch (Exception $e) {
     http_response_code(500);

@@ -30,23 +30,46 @@ try {
     $update_hit = $pdo->prepare("UPDATE boards SET views = views + 1 WHERE id = ?");
     $update_hit->execute([$post_id]);
 
-    // 4. 현재 게시글 상세 정보 조회 (상품 정보 조인)
-    $stmt = $pdo->prepare("
-        SELECT 
-            b.id, b.category, b.title, b.author, b.content, b.views as hit, 
-            DATE_FORMAT(b.created_at, '%Y-%m-%d') as date,
-            b.rating, b.image_url as review_image,
-            p.id as product_id, p.name as product_name, p.image_url as product_image, p.price as product_price
-        FROM boards b
-        LEFT JOIN products p ON b.product_id = p.id
-        WHERE b.id = ?
-    ");
+    // 4. 현재 게시글 상세 정보 조회
+    $stmt = $pdo->prepare("SELECT * FROM boards WHERE id = ?");
     $stmt->execute([$post_id]);
     $post = $stmt->fetch();
 
     if (!$post) {
         echo json_encode(['success' => false, 'message' => 'Post not found']);
         exit;
+    }
+
+    // 상품 정보 상세 로드
+    $products = [];
+    $pid_raw = $post['product_id'];
+    if (!empty($pid_raw) && $pid_raw[0] === '[') {
+        $p_list = json_decode($pid_raw, true);
+        foreach ($p_list as $item) {
+            $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+            $p_stmt->execute([$item['id']]);
+            $p_info = $p_stmt->fetch();
+            if ($p_info) {
+                $p_info['quantity'] = $item['quantity'] ?? 1;
+                $products[] = $p_info;
+            }
+        }
+    } else if (!empty($pid_raw)) {
+        $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+        $p_stmt->execute([(int)$pid_raw]);
+        $p_info = $p_stmt->fetch();
+        if ($p_info) {
+            $p_info['quantity'] = 1;
+            $products[] = $p_info;
+        }
+    }
+    $post['products'] = $products;
+    // 하위 호환성을 위해 첫 번째 상품 정보를 최상위에 유지
+    if (!empty($products)) {
+        $post['product_id'] = $products[0]['id'];
+        $post['product_name'] = $products[0]['name'];
+        $post['product_image'] = $products[0]['image_url'];
+        $post['product_price'] = $products[0]['price'];
     }
 
     // 5. 이전글/다음글 정보 조회 (같은 카테고리 내에서)

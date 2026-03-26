@@ -148,17 +148,95 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete_notice' && isset($_GET
     } catch (Exception $e) { echo "<script>alert('삭제 실패: " . $e->getMessage() . "');</script>"; }
 }
 
-if (isset($_GET['action']) && $_GET['action'] === 'delete_bulk' && isset($_GET['id'])) {
+if (isset($_GET['action']) && $_GET['action'] === 'delete_qna' && isset($_GET['id'])) {
     $delete_id = (int)$_GET['id'];
     try {
-        $pdo->prepare("DELETE FROM bulk_purchase_inquiry WHERE id = ?")->execute([$delete_id]);
-        echo "<script>alert('대량구매 문의가 삭제되었습니다.'); location.href='admin_products.php?tab=manage-bulk';</script>";
+        $pdo->prepare("DELETE FROM product_qna WHERE id = ? OR parent_id = ?")->execute([$delete_id, $delete_id]);
+        echo "<script>alert('문의가 삭제되었습니다.'); location.href='admin_products.php?tab=manage-qna';</script>";
     } catch (Exception $e) { echo "<script>alert('삭제 실패: " . $e->getMessage() . "');</script>"; }
 }
 
-// 4. 후기 관리 API (JSON)
-if (isset($_GET['action'])) {
-    $action = $_GET['action'];
+if (isset($_POST['action']) && $_POST['action'] === 'save_qna_answer') {
+    $parent_id = (int)$_POST['parent_id'];
+    $content = $_POST['content'];
+    $author = '관리자';
+
+    try {
+        $pdo->beginTransaction();
+        
+        // 기존 답변이 있는지 확인
+        $stmt = $pdo->prepare("SELECT id FROM product_qna WHERE parent_id = ? LIMIT 1");
+        $stmt->execute([$parent_id]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            // 수정
+            $pdo->prepare("UPDATE product_qna SET content = ?, created_at = NOW() WHERE id = ?")
+                ->execute([$content, $existing['id']]);
+        } else {
+            // 새 답변 등록
+            $pdo->prepare("INSERT INTO product_qna (parent_id, content, author, title) VALUES (?, ?, ?, 'RE: 답변')")
+                ->execute([$parent_id, $content, $author]);
+        }
+
+        // 질문 상태 업데이트
+        $pdo->prepare("UPDATE product_qna SET status = 'answered' WHERE id = ?")
+            ->execute([$parent_id]);
+
+        $pdo->commit();
+        echo json_encode(['success' => true, 'message' => '답변이 저장되었습니다.']);
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// 4. 후기 및 QnA API (JSON)
+if (isset($_GET['action']) || isset($_POST['action'])) {
+    $action = isset($_GET['action']) ? $_GET['action'] : $_POST['action'];
+
+    // 0. 상품 목록 조회 (공통)
+    if ($action === 'get_products') {
+        try {
+            $stmt = $pdo->query("SELECT p.*, c.name as category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id ORDER BY p.id DESC");
+            $products = $stmt->fetchAll();
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => true, 'data' => $products]);
+        } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // 0-1. 실시간 제품 검색 (Step 2)
+    if ($action === 'search') {
+        $keyword = isset($_GET['keyword']) ? $_GET['keyword'] : '';
+        try {
+            if (mb_strlen($keyword, 'UTF-8') < 1) {
+                echo json_encode(['success' => true, 'data' => []]);
+                exit;
+            }
+            $stmt = $pdo->prepare("
+                SELECT p.*, c.name as category_name 
+                FROM products p 
+                LEFT JOIN categories c ON p.category_id = c.id 
+                WHERE p.name LIKE ? OR p.description LIKE ?
+                ORDER BY p.id DESC
+            ");
+            $param = "%$keyword%";
+            $stmt->execute([$param, $param]);
+            $results = $stmt->fetchAll();
+            
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => true, 'data' => $results]);
+        } catch (Exception $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
 
     // A. 후기 리스트 호출 (action=get_reviews)
     if ($action === 'get_reviews') {
@@ -432,8 +510,34 @@ if (isset($_GET['action'])) {
         $stmt->execute([$id]);
         $qna = $stmt->fetch();
 
-        if ($qna && $qna['is_private'] == 0) {
+        if ($qna && ($qna['is_private'] == 0 || $action === 'check_qna_auth')) {
             $pdo->prepare("UPDATE product_qna SET views = views + 1 WHERE id = ?")->execute([$id]);
+            
+            // 상품 정보 상세 로드
+            $products = [];
+            $pid_raw = $qna['product_id'];
+            if (!empty($pid_raw) && $pid_raw[0] === '[') {
+                $p_list = json_decode($pid_raw, true);
+                foreach ($p_list as $item) {
+                    $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+                    $p_stmt->execute([$item['id']]);
+                    $p_info = $p_stmt->fetch();
+                    if ($p_info) {
+                        $p_info['quantity'] = $item['quantity'] ?? 1;
+                        $products[] = $p_info;
+                    }
+                }
+            } else if (!empty($pid_raw)) {
+                $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+                $p_stmt->execute([(int)$pid_raw]);
+                $p_info = $p_stmt->fetch();
+                if ($p_info) {
+                    $p_info['quantity'] = 1;
+                    $products[] = $p_info;
+                }
+            }
+            $qna['products'] = $products;
+
             $ans_stmt = $pdo->prepare("SELECT content, created_at FROM product_qna WHERE parent_id = ? ORDER BY created_at ASC");
             $ans_stmt->execute([$id]);
             $qna['answers'] = $ans_stmt->fetchAll();
@@ -443,6 +547,42 @@ if (isset($_GET['action'])) {
         } else {
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success' => false, 'message' => '비공개 글이거나 찾을 수 없습니다.']);
+        }
+        exit;
+    }
+
+    // I. QnA 비밀번호 확인 및 조회
+    if ($action === 'check_qna_auth' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $id = (int)$_POST['id'];
+        $password = $_POST['password'];
+
+        $stmt = $pdo->prepare("SELECT * FROM product_qna WHERE id = ?");
+        $stmt->execute([$id]);
+        $qna = $stmt->fetch();
+
+        if ($qna && password_verify($password, $qna['password'])) {
+            // view_qna 로직 재사용 (위에서 정의된 로직과 유사)
+            $products = [];
+            $pid_raw = $qna['product_id'];
+            if (!empty($pid_raw) && $pid_raw[0] === '[') {
+                $p_list = json_decode($pid_raw, true);
+                foreach ($p_list as $item) {
+                    $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+                    $p_stmt->execute([$item['id']]);
+                    $p_info = $p_stmt->fetch();
+                    if ($p_info) { $p_info['quantity'] = $item['quantity'] ?? 1; $products[] = $p_info; }
+                }
+            }
+            $qna['products'] = $products;
+            $ans_stmt = $pdo->prepare("SELECT content, created_at FROM product_qna WHERE parent_id = ? ORDER BY created_at ASC");
+            $ans_stmt->execute([$id]);
+            $qna['answers'] = $ans_stmt->fetchAll();
+
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => true, 'data' => $qna]);
+        } else {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => '비밀번호가 일치하지 않습니다.']);
         }
         exit;
     }
@@ -458,8 +598,16 @@ $reviews = $pdo->query("SELECT r.*, p.name AS product_name FROM product_reviews 
 $product_count = count($products);
 $notice_count = count($notices);
 $review_count = count($reviews);
-$bulk_inquiry_count = $pdo->query("SELECT COUNT(*) FROM bulk_purchase_inquiry")->fetchColumn();
 $bulk_inquiries = $pdo->query("SELECT * FROM bulk_purchase_inquiry ORDER BY created_at DESC")->fetchAll();
+$bulk_inquiry_count = count($bulk_inquiries);
+$qna_count = $pdo->query("SELECT COUNT(*) FROM product_qna WHERE parent_id IS NULL")->fetchColumn();
+$qnas = $pdo->query("
+    SELECT q.*, 
+           (SELECT content FROM product_qna WHERE parent_id = q.id LIMIT 1) as admin_answer
+    FROM product_qna q 
+    WHERE q.parent_id IS NULL 
+    ORDER BY q.created_at DESC
+")->fetchAll();
 
 // 수정용 데이터 로드
 $edit_data = null;
@@ -512,6 +660,7 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             <a href="admin_products.php?tab=add-product" class="menu-item <?= $active_tab=='add-product'?'active':'' ?>"><i class="fas fa-plus-circle"></i> 상품 등록</a>
             <a href="admin_products.php?tab=manage-product" class="menu-item <?= ($active_tab=='manage-product'||$active_tab=='edit-product')?'active':'' ?>"><i class="fas fa-box"></i> 상품 관리</a>
             <a href="admin_products.php?tab=manage-review" class="menu-item <?= $active_tab=='manage-review'?'active':'' ?>"><i class="fas fa-star"></i> 후기 관리</a>
+            <a href="admin_products.php?tab=manage-qna" class="menu-item <?= $active_tab=='manage-qna'?'active':'' ?>"><i class="fas fa-question-circle"></i> 상품 Q&A 관리</a>
             <a href="admin_products.php?tab=manage-bulk" class="menu-item <?= $active_tab=='manage-bulk'?'active':'' ?>"><i class="fas fa-handshake"></i> 대량구매 문의</a>
             <a href="admin_products.php?tab=manage-notice" class="menu-item <?= $active_tab=='manage-notice'?'active':'' ?>"><i class="fas fa-bullhorn"></i> 공지사항 관리</a>
         </div>
@@ -523,7 +672,7 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             <div class="header"><h1>오늘의 현황</h1><div class="version">관리자 모드 v1.2</div></div>
             <div class="stats-grid">
                 <div class="stat-card" style="border-left-color: var(--brand-primary);"><span style="font-size:12px; font-weight:700; color:#64748b;">등록 상품 수</span><div style="font-size:28px; font-weight:800;"><?= $product_count ?>개</div></div>
-                <div class="stat-card" style="border-left-color: #f59e0b;"><span style="font-size:12px; font-weight:700; color:#64748b;">공지사항 수</span><div style="font-size:28px; font-weight:800;"><?= $notice_count ?>개</div></div>
+                <div class="stat-card" style="border-left-color: #f59e0b;"><span style="font-size:12px; font-weight:700; color:#64748b;">Q&A 문의</span><div style="font-size:28px; font-weight:800;"><?= $qna_count ?>건</div></div>
                 <div class="stat-card" style="border-left-color: var(--success);"><span style="font-size:12px; font-weight:700; color:#64748b;">상품 후기</span><div style="font-size:28px; font-weight:800;"><?= $review_count ?>개</div></div>
                 <div class="stat-card" style="border-left-color: #3b82f6;"><span style="font-size:12px; font-weight:700; color:#64748b;">대량구매 문의</span><div style="font-size:28px; font-weight:800;"><?= $bulk_inquiry_count ?>건</div></div>
             </div>
@@ -651,7 +800,61 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             </div>
         </div>
 
-        <!-- 단체/대량구매 문의 관리 -->
+        <!-- 상품 Q&A 관리 -->
+        <div class="tab-content <?= $active_tab=='manage-qna'?'active':'' ?>">
+            <div class="header"><h1>상품 Q&A 관리</h1><div class="version">관리자 모드 v1.2</div></div>
+            
+            <div class="card">
+                <style>
+                    .qna-row { display: grid; grid-template-columns: 60px 100px 1fr 100px 120px 100px 140px; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; align-items: center; text-align: center; font-size: 13px; }
+                    .qna-detail { display: none; padding: 25px 40px; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+                    .qna-detail.active { display: block; }
+                    .answer-box { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #cbd5e1; }
+                    .badge-pending { padding: 3px 8px; background: #fee2e2; color: #ef4444; border-radius: 12px; font-size: 11px; font-weight: 700; }
+                    .badge-answered { padding: 3px 8px; background: #ecfdf5; color: #059669; border-radius: 12px; font-size: 11px; font-weight: 700; }
+                    .btn-qna-answer { background: var(--brand-primary); color: white !important; }
+                    .btn-qna-answer:hover { opacity: 0.9; }
+                </style>
+                <div class="qna-row" style="font-weight: 800; background: #f8fafc; font-size: 12px;">
+                    <div>번호</div><div>상태</div><div>문의 제목 / 내용</div><div>작성자</div><div>연락처</div><div>비밀글</div><div>관리</div>
+                </div>
+                <?php if(empty($qnas)): ?>
+                    <div style="padding:50px; text-align:center; color:#94a3b8;">등록된 Q&A 문의가 없습니다.</div>
+                <?php endif; ?>
+                <?php foreach($qnas as $index => $q): ?>
+                    <div class="qna-row">
+                        <div><?= $q['id'] ?></div>
+                        <div><?= ($q['status'] === 'answered') ? '<span class="badge-answered">답변완료</span>' : '<span class="badge-pending">답변대기</span>' ?></div>
+                        <div style="text-align:left; cursor:pointer;" onclick="toggleQnADetail(<?= $q['id'] ?>)">
+                            <div style="font-weight:600;"><?= htmlspecialchars($q['title']) ?></div>
+                            <div style="color:#94a3b8; font-size:11px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px;"><?= htmlspecialchars($q['content']) ?></div>
+                        </div>
+                        <div><?= htmlspecialchars($q['author']) ?></div>
+                        <div><?= htmlspecialchars($q['phone']) ?></div>
+                        <div><?= $q['is_private'] ? '<i class="fas fa-lock text-gray-400"></i>' : '-' ?></div>
+                        <div class="actions">
+                            <button class="btn-action btn-qna-answer" onclick="toggleQnADetail(<?= $q['id'] ?>)"><i class="fas fa-pen"></i> 답변</button>
+                            <button class="btn-action btn-delete" onclick="if(confirm('이 문의를 삭제하시겠습니까?')) location.href='admin_products.php?action=delete_qna&id=<?= $q['id'] ?>'"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div id="qna-detail-<?= $q['id'] ?>" class="qna-detail">
+                        <div style="background:white; padding:25px; border-radius:15px; border:1px solid #e2e8f0; margin-bottom:15px;">
+                            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">[문의 내용]</div>
+                            <div style="line-height:1.6; white-space:pre-wrap;"><?= htmlspecialchars($q['content']) ?></div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:15px; text-align:right;">작성일: <?= $q['created_at'] ?> | 이메일: <?= htmlspecialchars($q['email']) ?></div>
+                        </div>
+                        
+                        <div class="answer-box">
+                            <div style="font-size:14px; font-weight:800; color:var(--brand-primary); margin-bottom:12px;">관리자 답변</div>
+                            <textarea id="answer-content-<?= $q['id'] ?>" style="width:100%; height:120px; padding:15px; border:1px solid #cbd5e1; border-radius:10px; font-family:inherit; resize:none;" placeholder="답변 내용을 입력하세요..."><?= htmlspecialchars($q['admin_answer'] ?? '') ?></textarea>
+                            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                                <button class="btn-submit" onclick="saveQnAAnswer(<?= $q['id'] ?>)" style="width:auto; padding:10px 40px;">답변 저장</button>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
         <div class="tab-content <?= $active_tab=='manage-bulk'?'active':'' ?>">
             <div class="header"><h1>단체/대량구매 문의 관리</h1><div class="version">관리자 모드 v1.2</div></div>
             
@@ -758,6 +961,53 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             document.getElementById('notice-submit-btn').innerText = '수정 완료';
             document.getElementById('notice-cancel-btn').style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function toggleQnADetail(id) {
+            const detail = document.getElementById('qna-detail-' + id);
+            const isActive = detail.classList.contains('active');
+            
+            // 모든 상세 보기 닫기 (선택 사항)
+            // document.querySelectorAll('.qna-detail').forEach(el => el.classList.remove('active'));
+            
+            if (isActive) {
+                detail.classList.remove('active');
+            } else {
+                detail.classList.add('active');
+            }
+        }
+
+        function saveQnAAnswer(id) {
+            const content = document.getElementById('answer-content-' + id).value;
+            if (!content.trim()) {
+                alert('답변 내용을 입력해주세요.');
+                return;
+            }
+
+            if (!confirm('답변을 저장하시겠습니까?')) return;
+
+            const formData = new FormData();
+            formData.append('action', 'save_qna_answer');
+            formData.append('parent_id', id);
+            formData.append('content', content);
+
+            fetch('admin_products.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    alert('답변이 성공적으로 저장되었습니다.');
+                    location.reload();
+                } else {
+                    alert('저장 실패: ' + result.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('네트워크 오류가 발생했습니다.');
+            });
         }
 
         function resetNoticeForm() {

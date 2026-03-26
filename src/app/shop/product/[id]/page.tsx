@@ -6,7 +6,8 @@ export async function generateStaticParams() {
   try {
     const response = await fetch(`${API_URL}/get_products.php?category=all`);
     if (!response.ok) throw new Error("Fetch failed");
-    const products = await response.json();
+    const result = await response.json();
+    const products = result.success ? result.data : (Array.isArray(result) ? result : []);
 
     return products.map((product: { id: number }) => ({
       id: product.id.toString(),

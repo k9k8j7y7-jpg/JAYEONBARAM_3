@@ -3,8 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronUp, ChevronDown, User, Calendar, Eye } from 'lucide-react';
+import { ChevronUp, ChevronDown, User, Calendar, Eye, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+interface ProductInfo {
+  id: number;
+  name: string;
+  image_url: string;
+  price: number;
+  quantity: number;
+}
 
 interface PostData {
   id: number;
@@ -14,7 +22,10 @@ interface PostData {
   hit: number;
   date: string;
   rating?: number;
+  thumbnail_url?: string;
   review_image?: string;
+  products?: ProductInfo[];
+  // Deprecated fields but kept for safety
   product_id?: number;
   product_name?: string;
   product_image?: string;
@@ -28,13 +39,18 @@ interface Navigation {
 
 export default function PostDetail({ id, category }: { id: string; category: string }) {
   const router = useRouter();
-  const [data, setData] = useState<{ post: PostData; navigation: Navigation } | null>(null);
+  const [data, setData] = useState<{ post: PostData; products?: ProductInfo[]; navigation: Navigation } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchPost = async () => {
       try {
-        const res = await fetch(`/api/view_post.php?id=${id}`);
+        let apiUrl = `/api/view_post.php?id=${id}`;
+        if (category === 'review') {
+          apiUrl = `/api/review_actions.php?action=view_review&id=${id}`;
+        }
+        
+        const res = await fetch(apiUrl);
         const result = await res.json();
         if (result.success) {
           setData(result.data);
@@ -46,7 +62,7 @@ export default function PostDetail({ id, category }: { id: string; category: str
       }
     };
     fetchPost();
-  }, [id]);
+  }, [id, category]);
 
   if (loading) {
     return (
@@ -64,8 +80,9 @@ export default function PostDetail({ id, category }: { id: string; category: str
 
   if (!data) return <div className="text-center py-20 text-gray-400 font-medium">게시글을 찾을 수 없습니다.</div>;
 
-  const { post, navigation } = data;
+  const { post, products, navigation } = data;
   const isReview = category === 'review';
+  const displayProducts = products || post.products || [];
 
   return (
     <div className="font-sans max-w-4xl mx-auto px-4">
@@ -77,9 +94,9 @@ export default function PostDetail({ id, category }: { id: string; category: str
               {category}
             </span>
             {isReview && post.rating !== undefined && (
-                <div className="flex text-[#FFD700]">
+                <div className="flex text-[#FFD700] gap-1">
                     {[...Array(5)].map((_, i) => (
-                        <span key={i} className={i < (post.rating ?? 0) ? "opacity-100" : "opacity-20"}>★</span>
+                        <Star key={i} size={16} fill={i < (post.rating ?? 0) ? "#FFD700" : "none"} strokeWidth={i < (post.rating ?? 0) ? 0 : 2} className={i < (post.rating ?? 0) ? "" : "text-gray-200"} />
                     ))}
                 </div>
             )}
@@ -92,73 +109,80 @@ export default function PostDetail({ id, category }: { id: string; category: str
           <div className="flex flex-wrap items-center gap-6 text-[14px] text-gray-500 font-medium">
             <div className="flex items-center gap-2">
               <User size={16} className="text-gray-400" />
-              <span className="text-gray-900">{post.author}</span>
+              <span className="text-gray-900">{post.author || (post as any).author_name}</span>
             </div>
             <span className="w-px h-3 bg-gray-200" />
             <div className="flex items-center gap-2">
               <Calendar size={16} className="text-gray-400" />
-              <span>{post.date}</span>
+              <span>{post.date || (post as any).created_at?.substring(0, 10)}</span>
             </div>
             <span className="w-px h-3 bg-gray-200" />
             <div className="flex items-center gap-2">
               <Eye size={16} className="text-gray-400" />
-              <span>{post.hit} views</span>
+              <span>{(post as any).hit_count || post.hit || 0} views</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Review Product Info Section */}
-      {isReview && post.product_name && (
-        <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-12 p-6 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-6 group cursor-pointer hover:bg-white hover:shadow-xl transition-all duration-500"
-            onClick={() => router.push(`/shop/product/${post.product_id}`)}
-        >
-            <div className="w-24 h-24 bg-white rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                <img src={post.product_image} alt={post.product_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+      {/* Multiple Products Display Section */}
+      {displayProducts.length > 0 && (
+        <div className="mb-12">
+            <p className="text-[12px] text-gray-400 font-bold tracking-widest uppercase mb-4 px-1">Related Products</p>
+            <div className="grid grid-cols-1 gap-4">
+                {displayProducts.map((p) => (
+                    <motion.div 
+                        key={p.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-5 group cursor-pointer hover:bg-white hover:shadow-xl hover:shadow-[#0A3D2E]/5 transition-all duration-500 border-l-4 border-l-transparent hover:border-l-[#0A3D2E]"
+                        onClick={() => router.push(`/shop/product/${p.id}`)}
+                    >
+                        <div className="w-20 h-20 bg-white rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                            <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h4 className="text-[16px] font-bold text-gray-900 group-hover:text-[#0A3D2E] transition-colors truncate">{p.name}</h4>
+                            <p className="text-[14px] text-[#0A3D2E] font-bold mt-1">₩{Number(p.price).toLocaleString()} <span className="text-gray-300 font-medium ml-2">/ {p.quantity}개</span></p>
+                        </div>
+                        <div className="px-4 text-[12px] font-bold text-gray-300 group-hover:text-[#0A3D2E] shrink-0">VIEW →</div>
+                    </motion.div>
+                ))}
             </div>
-            <div className="flex-1">
-                <p className="text-[12px] text-gray-400 font-bold tracking-wider uppercase mb-1">Purchased Product</p>
-                <h4 className="text-[18px] font-bold text-gray-900 group-hover:text-[#0A3D2E] transition-colors">{post.product_name}</h4>
-                <p className="text-[15px] text-[#0A3D2E] font-bold">₩{Number(post.product_price).toLocaleString()}</p>
-            </div>
-            <div className="px-4 text-[13px] font-bold text-gray-400 group-hover:text-[#0A3D2E]">VIEW PRODUCT →</div>
-        </motion.div>
+        </div>
       )}
 
       {/* Content Area */}
       <div className="mb-20">
-        {isReview && post.review_image && (
-            <div className="mb-12 rounded-2xl overflow-hidden shadow-2xl">
-                <img src={post.review_image} alt="Review attachment" className="w-full h-auto" />
+        {(post.review_image || post.thumbnail_url) && (
+            <div className="mb-12 rounded-[32px] overflow-hidden shadow-2xl border border-gray-100">
+                <img src={post.review_image || post.thumbnail_url} alt="Review attachment" className="w-full h-auto" />
             </div>
         )}
         <div 
-          className="text-[17px] md:text-[18px] leading-[1.8] text-gray-700 whitespace-pre-wrap break-words font-light"
+          className="text-[17px] md:text-[18px] leading-[1.8] text-gray-700 whitespace-pre-wrap break-words font-light px-1"
           dangerouslySetInnerHTML={{ __html: post.content }}
         />
       </div>
 
       {/* Navigation (Prev/Next) */}
-      <div className="border-t border-b border-gray-100 mb-10 overflow-hidden rounded-xl border-x">
+      <div className="border border-gray-100 mb-10 overflow-hidden rounded-[24px]">
         {navigation.next && (
-          <Link href={`/community/${category}/${navigation.next.id}`} className="flex items-center gap-6 py-6 px-6 hover:bg-gray-50 transition-all border-b border-gray-100 group">
-            <div className="flex items-center gap-2 text-gray-300 font-bold text-[12px] uppercase tracking-widest w-[100px] shrink-0">
+          <Link href={`/community/${category}/${navigation.next.id}`} className="flex items-center gap-6 py-6 px-8 hover:bg-gray-50 transition-all border-b border-gray-100 group">
+            <div className="flex items-center gap-2 text-gray-300 font-bold text-[11px] uppercase tracking-widest w-[80px] shrink-0">
               <ChevronUp size={16} />
               Next
             </div>
-            <span className="text-gray-600 group-hover:text-gray-900 font-medium transition-colors line-clamp-1">{navigation.next.title}</span>
+            <span className="text-gray-600 group-hover:text-gray-900 font-bold transition-colors line-clamp-1">{navigation.next.title}</span>
           </Link>
         )}
         {navigation.prev && (
-          <Link href={`/community/${category}/${navigation.prev.id}`} className="flex items-center gap-6 py-6 px-6 hover:bg-gray-50 transition-all group">
-            <div className="flex items-center gap-2 text-gray-300 font-bold text-[12px] uppercase tracking-widest w-[100px] shrink-0">
+          <Link href={`/community/${category}/${navigation.prev.id}`} className="flex items-center gap-6 py-6 px-8 hover:bg-gray-50 transition-all group">
+            <div className="flex items-center gap-2 text-gray-300 font-bold text-[11px] uppercase tracking-widest w-[80px] shrink-0">
               <ChevronDown size={16} />
               Prev
             </div>
-            <span className="text-gray-600 group-hover:text-gray-900 font-medium transition-colors line-clamp-1">{navigation.prev.title}</span>
+            <span className="text-gray-600 group-hover:text-gray-900 font-bold transition-colors line-clamp-1">{navigation.prev.title}</span>
           </Link>
         )}
       </div>
@@ -167,7 +191,7 @@ export default function PostDetail({ id, category }: { id: string; category: str
       <div className="flex justify-center mb-24">
         <Link 
           href={`/community/${category}`}
-          className="inline-flex items-center justify-center bg-white border-2 border-gray-900 text-gray-900 px-12 py-4 text-[14px] font-bold hover:bg-gray-900 hover:text-white transition-all duration-300 tracking-widest uppercase"
+          className="inline-flex items-center justify-center bg-gray-900 text-white px-14 py-5 text-[14px] font-bold hover:bg-[#0A3D2E] rounded-2xl transition-all duration-300 tracking-widest uppercase shadow-xl shadow-gray-900/10"
         >
           Back to List
         </Link>
@@ -175,4 +199,3 @@ export default function PostDetail({ id, category }: { id: string; category: str
     </div>
   );
 }
-

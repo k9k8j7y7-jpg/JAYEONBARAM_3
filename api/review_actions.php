@@ -47,7 +47,7 @@ try {
         $stmt = $pdo->prepare("
             SELECT r.*, p.name as product_name, p.image_url as product_image 
             FROM product_reviews r 
-            LEFT JOIN products p ON r.product_id = p.id 
+            LEFT JOIN products p ON (CASE WHEN r.product_id REGEXP '^[0-9]+$' THEN r.product_id ELSE NULL END) = p.id
             WHERE $where_sql 
             ORDER BY r.is_best DESC, r.created_at DESC 
             LIMIT ? OFFSET ?
@@ -59,9 +59,27 @@ try {
         $stmt->bindValue($p_idx++, $offset, PDO::PARAM_INT);
         $stmt->execute();
         
+        $reviews = $stmt->fetchAll();
+        // 각 후기에 대해 product_id가 JSON인 경우 첫 번째 상품 정보를 대표로 설정 (목록용)
+        foreach ($reviews as &$rev) {
+            if (!empty($rev['product_id']) && $rev['product_id'][0] === '[') {
+                $p_list = json_decode($rev['product_id'], true);
+                if (!empty($p_list)) {
+                    $first_p_id = $p_list[0]['id'];
+                    $p_stmt = $pdo->prepare("SELECT name, image_url FROM products WHERE id = ?");
+                    $p_stmt->execute([$first_p_id]);
+                    $p_info = $p_stmt->fetch();
+                    if ($p_info) {
+                        $rev['product_name'] = $p_info['name'] . (count($p_list) > 1 ? ' 외 ' . (count($p_list)-1) . '건' : '');
+                        $rev['product_image'] = $p_info['image_url'];
+                    }
+                }
+            }
+        }
+
         echo json_encode([
             'success' => true,
-            'data' => $stmt->fetchAll(),
+            'data' => $reviews,
             'pagination' => [
                 'current_page' => $page,
                 'total_pages' => ceil($total_items / $limit),
@@ -75,16 +93,35 @@ try {
         $review_id = (int)$_GET['id'];
         $pdo->prepare("UPDATE product_reviews SET hit_count = hit_count + 1 WHERE id = ?")->execute([$review_id]);
 
-        $stmt = $pdo->prepare("
-            SELECT r.*, p.name AS product_name, p.image_url AS product_image, p.price as product_price
-            FROM product_reviews r
-            LEFT JOIN products p ON r.product_id = p.id
-            WHERE r.id = ?
-        ");
+        $stmt = $pdo->prepare("SELECT * FROM product_reviews WHERE id = ?");
         $stmt->execute([$review_id]);
         $review = $stmt->fetch();
 
         if ($review) {
+            $products = [];
+            $pid_raw = $review['product_id'];
+
+            if (!empty($pid_raw) && $pid_raw[0] === '[') {
+                $p_list = json_decode($pid_raw, true);
+                foreach ($p_list as $item) {
+                    $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+                    $p_stmt->execute([$item['id']]);
+                    $p_info = $p_stmt->fetch();
+                    if ($p_info) {
+                        $p_info['quantity'] = $item['quantity'] ?? 1;
+                        $products[] = $p_info;
+                    }
+                }
+            } else {
+                $p_stmt = $pdo->prepare("SELECT id, name, image_url, price FROM products WHERE id = ?");
+                $p_stmt->execute([(int)$pid_raw]);
+                $p_info = $p_stmt->fetch();
+                if ($p_info) {
+                    $p_info['quantity'] = 1;
+                    $products[] = $p_info;
+                }
+            }
+
             $prev = $pdo->prepare("SELECT id, title FROM product_reviews WHERE id < ? ORDER BY id DESC LIMIT 1");
             $prev->execute([$review_id]);
             $next = $pdo->prepare("SELECT id, title FROM product_reviews WHERE id > ? ORDER BY id ASC LIMIT 1");
@@ -94,6 +131,7 @@ try {
                 'success' => true,
                 'data' => [
                     'post' => $review,
+                    'products' => $products,
                     'navigation' => [
                         'prev' => $prev->fetch() ?: null,
                         'next' => $next->fetch() ?: null
@@ -107,7 +145,7 @@ try {
 
     // C. 후기 등록
     elseif ($action === 'add_review' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $product_id = (int)$_POST['product_id'];
+        $product_id = $_POST['product_id']; // JSON string or ID
         $rating = (int)$_POST['rating'];
         $title = $_POST['title'];
         $content = $_POST['content'];

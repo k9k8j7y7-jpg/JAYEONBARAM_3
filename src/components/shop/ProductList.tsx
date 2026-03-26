@@ -35,8 +35,11 @@ const ProductList = ({ categorySlug, categoryName }: ProductListProps) => {
                 const response = await fetch(`${API_URL}/get_products.php?category=${categorySlug}`);
                 const data = await response.json();
                 
-                // 데이터가 배열인지 확인하여 렌더링 (v6.0 복구)
-                if (Array.isArray(data)) {
+                // 데이터가 success 필드와 함께 data 배열로 오는지 확인 (v6.0 복구 및 호환성 업데이트)
+                if (data.success && Array.isArray(data.data)) {
+                    setProducts(data.data);
+                } else if (Array.isArray(data)) {
+                    // 만약 아직 예전 형식을 반환하는 경우에 대한 하위 호환성
                     setProducts(data);
                 } else {
                     console.error("API returned invalid data format:", data);

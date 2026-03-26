@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import CommunitySidebar from '@/components/layout/CommunitySidebar';
+import ProductSelectModal from '@/components/community/ProductSelectModal';
+import { X, Plus, ShoppingBag } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -15,6 +17,8 @@ export default function BulkInquiryWritePage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<{id: number, quantity: number}[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     author: '',
     email: '',
@@ -26,7 +30,6 @@ export default function BulkInquiryWritePage() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // 상품 목록 가져오기
     fetch('/api/get_products.php')
       .then(res => res.json())
       .then(result => {
@@ -34,12 +37,18 @@ export default function BulkInquiryWritePage() {
       });
   }, []);
 
-  const handleProductToggle = (id: number) => {
-    setSelectedProducts(prev => 
-      prev.some(p => p.id === id) 
-        ? prev.filter(p => p.id !== id) 
-        : [...prev, { id, quantity: 1 }]
-    );
+  const handleProductSelect = (selectedIds: number[]) => {
+    setSelectedProducts(prev => {
+      const next = selectedIds.map(id => {
+        const existing = prev.find(p => p.id === id);
+        return existing || { id, quantity: 1 };
+      });
+      return next;
+    });
+  };
+
+  const handleRemoveProduct = (id: number) => {
+    setSelectedProducts(prev => prev.filter(p => p.id !== id));
   };
 
   const handleQuantityChange = (id: number, delta: number) => {
@@ -96,55 +105,65 @@ export default function BulkInquiryWritePage() {
           <CommunitySidebar />
 
           <div className="flex-1 font-sans">
-            <div className="border-b border-gray-100 pb-8 mb-12">
-              <h3 className="text-3xl font-serif font-bold text-[#0A3D2E] tracking-tight">Write Inquiry</h3>
-              <p className="text-gray-400 mt-3 font-medium">자연바람의 대량구매 및 단체 주문 상담 서비스입니다.</p>
+            <div className="border-b border-gray-100 pb-8 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <h3 className="text-3xl font-serif font-bold text-[#0A3D2E] tracking-tight">단체/대량구매 문의 🤝</h3>
+                <p className="text-gray-400 mt-3 font-medium">자연바람의 대량구매 및 단체 주문 상담 서비스입니다.</p>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-12">
               {/* Product Selection Section */}
               <div className="bg-gray-50 p-10 rounded-3xl">
                 <label className="block text-[#0A3D2E] text-[16px] font-bold mb-6">대상 상품 선택 (다중 선택 가능) <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto p-2">
-                  {products.map(product => {
-                    const isSelected = selectedProducts.some(p => p.id === product.id);
-                    return (
-                      <label 
-                        key={product.id} 
-                        className={`relative flex flex-col items-center p-4 border-2 rounded-2xl cursor-pointer transition-all hover:border-[#0A3D2E]
-                          ${isSelected ? 'border-[#0A3D2E] bg-white shadow-lg' : 'border-gray-100 bg-white'}`}
-                      >
-                        <input 
-                          type="checkbox" 
-                          className="absolute top-3 right-3 accent-[#0A3D2E]"
-                          checked={isSelected}
-                          onChange={() => handleProductToggle(product.id)}
-                        />
-                        <img src={product.image_url} alt={product.name} className="w-16 h-16 object-cover rounded-md mb-3" />
-                        <div className="text-[12px] font-bold text-gray-700 text-center line-clamp-2">{product.name}</div>
-                      </label>
-                    );
-                  })}
-                </div>
-                {selectedProducts.length > 0 && (
-                    <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-6">
-                        <label className="text-[#0A3D2E] text-[14px] font-bold">선택된 상품 및 수량</label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {selectedProducts.map(sel => {
-                                const p = products.find(prod => prod.id === sel.id);
-                                return p ? (
-                                    <div key={sel.id} className="flex flex-row items-center justify-between p-3 bg-white border border-[#0A3D2E]/20 rounded-xl shadow-sm">
-                                        <span className="text-[13px] font-bold text-gray-800 break-keep mr-2 line-clamp-1">{p.name}</span>
-                                        <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1 shrink-0">
-                                            <button type="button" onClick={() => handleQuantityChange(sel.id, -1)} className="w-7 h-7 flex items-center justify-center bg-white border border-gray-200 rounded-md text-gray-500 hover:text-[#0A3D2E] font-bold shadow-sm">-</button>
-                                            <span className="text-[13px] font-bold w-6 text-center">{sel.quantity}</span>
-                                            <button type="button" onClick={() => handleQuantityChange(sel.id, 1)} className="w-7 h-7 flex items-center justify-center bg-white border border-gray-200 rounded-md text-gray-500 hover:text-[#0A3D2E] font-bold shadow-sm">+</button>
-                                        </div>
-                                    </div>
-                                ) : null;
-                            })}
-                        </div>
+                
+                {!selectedProducts.length ? (
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(true)}
+                    className="w-full py-16 bg-white border-2 border-dashed border-gray-200 rounded-3xl text-gray-400 hover:border-[#0A3D2E] hover:text-[#0A3D2E] transition-all flex flex-col items-center gap-4 group"
+                  >
+                    <div className="p-4 bg-gray-50 rounded-full group-hover:bg-[#0A3D2E]/10 transition-colors">
+                      <ShoppingBag size={40} className="group-hover:scale-110 transition-transform" />
                     </div>
+                    <span className="font-bold text-lg">문의하실 상품을 선택해주세요.</span>
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {selectedProducts.map(sel => {
+                        const p = products.find(prod => prod.id === sel.id);
+                        return p ? (
+                          <div key={sel.id} className="flex flex-row items-center justify-between p-4 bg-white border border-[#0A3D2E]/5 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-gray-100">
+                                <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block text-[15px] font-bold text-gray-800 truncate">{p.name}</span>
+                                <span className="text-[12px] text-[#0A3D2E] font-bold">₩{p.price.toLocaleString()}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-1 shrink-0 ml-4">
+                              <button type="button" onClick={() => handleQuantityChange(sel.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-[#0A3D2E] hover:border-[#0A3D2E] font-bold transition-all shadow-sm">-</button>
+                              <span className="text-[14px] font-bold w-8 text-center text-[#0A3D2E]">{sel.quantity}</span>
+                              <button type="button" onClick={() => handleQuantityChange(sel.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-100 rounded-lg text-gray-400 hover:text-[#0A3D2E] hover:border-[#0A3D2E] font-bold transition-all shadow-sm">+</button>
+                              <button type="button" onClick={() => handleRemoveProduct(sel.id)} className="ml-2 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors">
+                                <X size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsModalOpen(true)}
+                      className="mt-4 self-start flex items-center gap-2 text-[14px] font-bold text-[#0A3D2E] hover:underline"
+                    >
+                      <Plus size={16} /> 상품 추가하기
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -157,31 +176,31 @@ export default function BulkInquiryWritePage() {
                     value={formData.author}
                     onChange={(e) => setFormData({ ...formData, author: e.target.value })}
                     placeholder="성함을 입력해 주세요."
-                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium shadow-inner"
                   />
                 </div>
 
                 {/* Email */}
-                <div>
+                <div className="col-span-2 md:col-span-1">
                   <label className="block text-[#0A3D2E] text-[14px] font-bold mb-3">이메일 <span className="text-red-500">*</span></label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="example@email.com"
-                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium shadow-inner"
                   />
                 </div>
 
                 {/* Phone */}
-                <div>
+                <div className="col-span-2 md:col-span-1">
                   <label className="block text-[#0A3D2E] text-[14px] font-bold mb-3">연락처 <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="010-0000-0000"
-                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium shadow-inner"
                   />
                 </div>
 
@@ -193,7 +212,7 @@ export default function BulkInquiryWritePage() {
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     placeholder="제목을 입력해 주세요."
-                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium shadow-inner"
                   />
                 </div>
 
@@ -205,7 +224,7 @@ export default function BulkInquiryWritePage() {
                     value={formData.content}
                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                     placeholder="희망 제품, 납기일, 포장 옵션 등 상세 문의 내용을 입력해 주세요."
-                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium"
+                    className="w-full px-5 py-4 bg-gray-50 border border-transparent rounded-xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all text-sm font-medium shadow-inner resize-none"
                   />
                 </div>
               </div>
@@ -214,7 +233,7 @@ export default function BulkInquiryWritePage() {
                 <button
                     type="button"
                     onClick={() => router.back()}
-                    className="flex-1 max-w-[200px] px-10 py-5 bg-white border-2 border-gray-100 text-[#0A3D2E] font-bold rounded-2xl hover:border-[#0A3D2E] transition-all tracking-wider uppercase"
+                    className="flex-1 max-w-[200px] px-10 py-5 bg-white border-2 border-gray-100 text-[#0A3D2E] font-bold rounded-2xl hover:border-[#0A3D2E] transition-all tracking-wider uppercase shadow-sm"
                 >
                     Cancel
                 </button>
@@ -233,6 +252,14 @@ export default function BulkInquiryWritePage() {
           </div>
         </div>
       </div>
+
+      <ProductSelectModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelect={handleProductSelect}
+        initialSelected={selectedProducts.map(p => p.id)}
+        multiple={true}
+      />
     </div>
   );
 }

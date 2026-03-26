@@ -172,15 +172,49 @@ export default function QnAList() {
                       )}
                     </button>
                     {expandedId === item.id && expandedContent && (
-                      <div className="mt-4 p-4 bg-[#f8f9f8] text-sm text-gray-700 whitespace-pre-wrap rounded">
-                        <div className="mb-4 pb-4 border-b border-gray-200">
-                          <strong>Q: </strong>{expandedContent.content}
-                        </div>
-                        {expandedContent.answers && expandedContent.answers.map((ans: any, i:number) => (
-                          <div key={i} className="mt-2 text-[#0A3D2E]">
-                            <strong>A: </strong>{ans.content}
+                      <div className="mt-4 p-8 bg-[#f8f9f8] text-sm text-gray-700 whitespace-pre-wrap rounded-[24px] border border-gray-100 shadow-inner">
+                        {/* Selected Products Display */}
+                        {expandedContent.products && expandedContent.products.length > 0 && (
+                          <div className="mb-8 p-6 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                            <h5 className="text-[13px] font-bold text-[#0A3D2E] mb-4 uppercase tracking-widest">문의 대상 상품</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {expandedContent.products.map((p: any) => (
+                                <div key={p.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100/50">
+                                  <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-white shadow-sm">
+                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-gray-800 text-[13px] truncate">{p.name}</p>
+                                    <p className="text-[11px] text-gray-400 font-medium">₩{p.price.toLocaleString()} / {p.quantity}개</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
+                        )}
+
+                        <div className="mb-6 pb-6 border-b border-gray-200/60 leading-relaxed min-h-[100px]">
+                          <strong className="text-[#0A3D2E] block mb-2 font-black">Q. QUESTION</strong>
+                          {expandedContent.content}
+                        </div>
+                        
+                        {expandedContent.answers && expandedContent.answers.length > 0 ? (
+                          expandedContent.answers.map((ans: any, i:number) => (
+                            <div key={i} className="mt-4 p-6 bg-[#0A3D2E]/5 rounded-2xl border border-[#0A3D2E]/10">
+                              <strong className="text-[#0A3D2E] block mb-2 font-black">A. ANSWER</strong>
+                              <div className="text-gray-800 leading-relaxed font-medium">
+                                {ans.content}
+                              </div>
+                              <div className="text-[11px] text-gray-400 mt-4 text-right">
+                                {ans.created_at.substring(0, 16)}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="mt-4 text-center py-6 text-gray-400 font-medium italic">
+                            답변을 준비 중입니다.
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>

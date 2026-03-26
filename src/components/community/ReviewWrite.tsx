@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Star, Upload, Package, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Star, Upload, X, Plus } from 'lucide-react';
+import ProductSelectModal from '@/components/community/ProductSelectModal';
 
 interface Product {
     id: number;
@@ -16,10 +16,10 @@ export default function ReviewWrite() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
-    const [showProductModal, setShowProductModal] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     
     // Form States
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [selectedProducts, setSelectedProducts] = useState<{id: number, quantity: number}[]>([]);
     const [rating, setRating] = useState(5);
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
@@ -33,7 +33,7 @@ export default function ReviewWrite() {
 
     const fetchProducts = async () => {
         try {
-            const res = await fetch('/api/get_products.php'); // 기존 API 재활용 또는 신규 생성 필요
+            const res = await fetch('/api/get_products.php');
             const data = await res.json();
             if (data.success) {
                 setProducts(data.data);
@@ -41,6 +41,20 @@ export default function ReviewWrite() {
         } catch (error) {
             console.error('Failed to fetch products:', error);
         }
+    };
+
+    const handleProductSelect = (selectedIds: number[]) => {
+        setSelectedProducts(prev => {
+            const next = selectedIds.map(id => {
+                const existing = prev.find(p => p.id === id);
+                return existing || { id, quantity: 1 };
+            });
+            return next;
+        });
+    };
+
+    const handleRemoveProduct = (id: number) => {
+        setSelectedProducts(prev => prev.filter(p => p.id !== id));
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,7 +71,7 @@ export default function ReviewWrite() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedProduct) return alert('상품을 선택해주세요.');
+        if (selectedProducts.length === 0) return alert('상품을 선택해주세요.');
         if (!title.trim()) return alert('제목을 입력해주세요.');
         if (!content.trim()) return alert('내용을 입력해주세요.');
         if (!authorName.trim()) return alert('작성자명을 입력해주세요.');
@@ -65,7 +79,8 @@ export default function ReviewWrite() {
         setLoading(true);
         const formData = new FormData();
         formData.append('action', 'add_review');
-        formData.append('product_id', selectedProduct.id.toString());
+        // Q&A와 동일하게 JSON 형식으로 ID 리스트 전송
+        formData.append('product_id', JSON.stringify(selectedProducts));
         formData.append('rating', rating.toString());
         formData.append('title', title);
         formData.append('content', content);
@@ -93,114 +108,140 @@ export default function ReviewWrite() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto py-10 px-4">
-            <h1 className="text-3xl font-bold text-[#0A3D2E] mb-2">Write Review</h1>
-            <p className="text-gray-500 mb-10">자연바람 상품에 대한 소중한 후기를 남겨주세요.</p>
+        <div className="max-w-4xl mx-auto py-20 px-4">
+            <div className="mb-12 border-b border-gray-100 pb-8">
+                <h1 className="text-4xl font-serif font-bold text-[#0A3D2E] mb-3 tracking-tight">Write Review ✨</h1>
+                <p className="text-gray-400 font-medium tracking-wide">자연바람 상품에 대한 소중한 후기를 남겨주세요.</p>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                {/* Product Selection */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-bold text-gray-700">대상 상품 <span className="text-red-500">*</span></label>
-                    {selectedProduct ? (
-                        <div className="flex items-center justify-between p-4 border-2 border-[#0A3D2E] rounded-xl bg-[#0A3D2E]/5">
-                            <div className="flex items-center gap-4">
-                                <img src={selectedProduct.image_url} alt="" className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-                                <div>
-                                    <p className="font-bold text-[#0A3D2E]">{selectedProduct.name}</p>
-                                    <p className="text-sm text-gray-400">{selectedProduct.price.toLocaleString()}원</p>
-                                </div>
+            <form onSubmit={handleSubmit} className="space-y-10">
+                {/* Product Selection Section */}
+                <div className="bg-gray-50 p-10 rounded-3xl shadow-sm">
+                    <label className="block text-[#0A3D2E] text-[16px] font-bold mb-6">구매하신 상품 <span className="text-red-500">*</span></label>
+                    
+                    <button 
+                        type="button" 
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-white border-2 border-gray-100 px-8 py-4 rounded-2xl font-bold text-[#0A3D2E] hover:border-[#0A3D2E] hover:bg-[#0A3D2E]/5 transition-all flex items-center gap-3 shadow-sm group"
+                    >
+                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                        상품 선택하기
+                    </button>
+
+                    {selectedProducts.length > 0 && (
+                        <div className="mt-8 flex flex-col gap-4 border-t border-gray-200 pt-8">
+                            <label className="text-gray-400 text-[12px] font-bold uppercase tracking-widest">Selected Products</label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {selectedProducts.map(sel => {
+                                    const p = products.find(prod => prod.id === sel.id);
+                                    return p ? (
+                                        <div key={sel.id} className="flex flex-row items-center justify-between p-4 bg-white border border-[#0A3D2E]/10 rounded-2xl shadow-sm group/item">
+                                            <div className="flex items-center gap-4 min-w-0">
+                                                <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-gray-50">
+                                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <span className="block text-[14px] font-bold text-gray-800 truncate">{p.name}</span>
+                                                    <span className="text-[12px] text-[#0A3D2E] font-bold">₩{p.price.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleRemoveProduct(sel.id)} 
+                                                className="w-10 h-10 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                            >
+                                                <X size={20} />
+                                            </button>
+                                        </div>
+                                    ) : null;
+                                })}
                             </div>
-                            <button type="button" onClick={() => setSelectedProduct(null)} className="text-gray-400 hover:text-red-500 transition-colors">
-                                <X size={20} />
-                            </button>
                         </div>
-                    ) : (
-                        <button 
-                            type="button"
-                            onClick={() => setShowProductModal(true)}
-                            className="w-full py-10 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:border-[#0A3D2E] hover:text-[#0A3D2E] transition-all flex flex-col items-center gap-2"
-                        >
-                            <Package size={32} />
-                            <span className="font-medium">리뷰할 상품을 선택해주세요.</span>
-                        </button>
                     )}
                 </div>
 
                 {/* Rating */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-bold text-gray-700">평점 <span className="text-red-500">*</span></label>
-                    <div className="flex gap-2">
+                <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm">
+                    <label className="block text-[#0A3D2E] text-[16px] font-bold mb-6">상품의 만족도는 어떠셨나요? <span className="text-red-500">*</span></label>
+                    <div className="flex gap-4">
                         {[1, 2, 3, 4, 5].map((star) => (
                             <button
                                 key={star}
                                 type="button"
                                 onClick={() => setRating(star)}
-                                className="transition-transform active:scale-90"
+                                className="group transition-all active:scale-95"
                             >
                                 <Star 
-                                    size={32} 
+                                    size={48} 
                                     fill={star <= rating ? "#FFC107" : "none"} 
                                     color={star <= rating ? "#FFC107" : "#E5E7EB"}
-                                    strokeWidth={2}
+                                    strokeWidth={star <= rating ? 0 : 2}
+                                    className="filter drop-shadow-sm group-hover:scale-110 transition-transform"
                                 />
                             </button>
                         ))}
                     </div>
+                    <p className="mt-4 text-sm font-bold text-gray-400">
+                        {rating === 5 ? "매우 만족스러워요! ⭐⭐⭐⭐⭐" : 
+                         rating === 4 ? "만족스러워요! ⭐⭐⭐⭐" : 
+                         rating === 3 ? "보통이에요. ⭐⭐⭐" : 
+                         rating === 2 ? "조금 아쉬워요. ⭐⭐" : "아쉬워요. ⭐"}
+                    </p>
                 </div>
 
-                {/* Title & Author */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="block text-sm font-bold text-gray-700">작성자 <span className="text-red-500">*</span></label>
+                {/* Author & Title */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                        <label className="block text-[#0A3D2E] text-[14px] font-bold">작성자 <span className="text-red-500">*</span></label>
                         <input 
                             type="text" 
                             value={authorName}
                             onChange={(e) => setAuthorName(e.target.value)}
-                            className="w-full border-b-2 border-gray-100 py-2 focus:border-[#0A3D2E] outline-none transition-colors"
-                            placeholder="작성자 성함을 입력해주세요."
+                            className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all font-medium text-sm shadow-inner"
+                            placeholder="성함을 입력해주세요."
                         />
                     </div>
-                    <div className="space-y-2">
-                        <label className="block text-sm font-bold text-gray-700">제목 <span className="text-red-500">*</span></label>
+                    <div className="space-y-3">
+                        <label className="block text-[#0A3D2E] text-[14px] font-bold">제목 <span className="text-red-500">*</span></label>
                         <input 
                             type="text" 
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full border-b-2 border-gray-100 py-2 focus:border-[#0A3D2E] outline-none transition-colors"
+                            className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all font-medium text-sm shadow-inner"
                             placeholder="제목을 입력해주세요."
                         />
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="space-y-2">
-                    <label className="block text-sm font-bold text-gray-700">내용 <span className="text-red-500">*</span></label>
+                <div className="space-y-3">
+                    <label className="block text-[#0A3D2E] text-[14px] font-bold">내용 <span className="text-red-500">*</span></label>
                     <textarea 
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
-                        className="w-full min-h-[300px] border-2 border-gray-100 p-4 rounded-xl focus:border-[#0A3D2E] outline-none transition-colors resize-none"
-                        placeholder="상품에 대한 진솔한 후기를 들려주세요 (최소 10자 이상)."
+                        className="w-full min-h-[300px] px-6 py-6 bg-gray-50 border border-transparent rounded-3xl outline-none focus:border-[#0A3D2E] focus:bg-white transition-all font-medium text-sm shadow-inner resize-none"
+                        placeholder="전달하고 싶은 후기 내용을 작성해주세요."
                     />
                 </div>
 
                 {/* Image Upload */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-bold text-gray-700">사진 첨부 (선택)</label>
+                <div className="bg-gray-50 p-10 rounded-3xl">
+                    <label className="block text-[#0A3D2E] text-[16px] font-bold mb-6">사진 첨부 (선택)</label>
                     <div className="flex items-start gap-4">
-                        <label className="cursor-pointer w-24 h-24 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-[#0A3D2E] hover:text-[#0A3D2E] transition-all">
-                            <Upload size={24} />
-                            <span className="text-[11px] font-bold mt-1 uppercase">Upload</span>
+                        <label className="cursor-pointer w-28 h-28 bg-white border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 hover:border-[#0A3D2E] hover:text-[#0A3D2E] transition-all group">
+                            <Upload size={28} className="group-hover:-translate-y-1 transition-transform" />
+                            <span className="text-[11px] font-bold mt-2 uppercase tracking-widest">Upload</span>
                             <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                         </label>
                         {imagePreview && (
-                            <div className="relative w-24 h-24">
-                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded-xl border border-gray-200" />
+                            <div className="relative w-28 h-28 group">
+                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded-2xl border border-gray-200 shadow-sm" />
                                 <button 
                                     type="button"
                                     onClick={() => { setImage(null); setImagePreview(null); }}
-                                    className="absolute -top-2 -right-2 bg-white rounded-full shadow-md p-1 hover:text-red-500 transition-colors"
+                                    className="absolute -top-3 -right-3 bg-white text-gray-400 hover:text-red-500 rounded-full shadow-lg p-2 transition-all"
                                 >
-                                    <X size={14} />
+                                    <X size={16} />
                                 </button>
                             </div>
                         )}
@@ -208,67 +249,31 @@ export default function ReviewWrite() {
                 </div>
 
                 {/* Submit Buttons */}
-                <div className="flex gap-4 pt-6 border-t border-gray-100">
+                <div className="flex gap-4 pt-10 border-t border-gray-100">
                     <button 
                         type="button" 
                         onClick={() => router.back()}
-                        className="flex-1 py-4 border-2 border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-all uppercase tracking-widest"
+                        className="flex-1 py-5 bg-white border-2 border-gray-100 rounded-2xl font-bold text-[#0A3D2E] hover:border-[#0A3D2E] transition-all tracking-widest text-sm uppercase"
                     >
                         Cancel
                     </button>
                     <button 
                         type="submit"
                         disabled={loading}
-                        className="flex-[2] py-4 bg-[#0A3D2E] text-white rounded-xl font-bold hover:bg-[#00331d] transition-all shadow-lg shadow-[#0A3D2E]/20 uppercase tracking-widest disabled:opacity-50"
+                        className="flex-[2] py-5 bg-[#0A3D2E] text-white rounded-2xl font-bold hover:bg-[#00331d] transition-all shadow-xl shadow-[#0A3D2E]/20 tracking-widest text-sm uppercase disabled:opacity-50"
                     >
                         {loading ? 'Submitting...' : 'Register Review'}
                     </button>
                 </div>
             </form>
 
-            {/* Product Selection Modal */}
-            <AnimatePresence>
-                {showProductModal && (
-                    <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-                        onClick={() => setShowProductModal(false)}
-                    >
-                        <motion.div 
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-[#f8f9f8]">
-                                <h2 className="text-xl font-bold text-[#0A3D2E]">Select Product</h2>
-                                <button onClick={() => setShowProductModal(false)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-                            </div>
-                            <div className="max-h-[500px] overflow-y-auto p-4 space-y-2">
-                                {products.map((product) => (
-                                    <button
-                                        key={product.id}
-                                        onClick={() => {
-                                            setSelectedProduct(product);
-                                            setShowProductModal(false);
-                                        }}
-                                        className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-[#0A3D2E]/5 transition-all text-left group"
-                                    >
-                                        <img src={product.image_url} alt="" className="w-16 h-16 object-cover rounded-xl border border-gray-100" />
-                                        <div className="flex-1">
-                                            <p className="font-bold text-gray-800 group-hover:text-[#0A3D2E] transition-colors">{product.name}</p>
-                                            <p className="text-sm text-gray-400">{product.price.toLocaleString()}원</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <ProductSelectModal 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSelect={handleProductSelect}
+                initialSelected={selectedProducts.map(p => p.id)}
+                multiple={true}
+            />
         </div>
     );
 }
