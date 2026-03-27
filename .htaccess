@@ -1,22 +1,5 @@
-Options -Indexes
-
 RewriteEngine On
-RewriteBase /
-
-# Handle .html extension removal
-RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s([^.]+)\.html [NC]
-RewriteRule ^ %1 [R=301,L]
-
-# Internal rewrite to .html
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}\.html -f
-RewriteRule ^(.*)$ $1.html [L]
-
-# Internal rewrite to .php for API
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}\.php -f
-RewriteRule ^(.*)$ $1.php [L]
-
-# Directory Index
-DirectoryIndex index.html index.php
+RewriteRule ^shop/product/([0-9]+)$ shop/product/$1/index.html [L]
+RewriteRule ^search$ search.html [L]

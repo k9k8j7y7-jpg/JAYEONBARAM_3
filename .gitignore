@@ -49,3 +49,5 @@ extend_db.sql
 insert_products.sql
 scp_test.txt
 scp_web_test.txt
+
+api/oauth_config.php

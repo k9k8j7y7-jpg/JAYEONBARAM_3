@@ -1,52 +1,47 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Instagram, ChevronDown, Search } from "lucide-react";
+import { Menu, X, Instagram, ChevronDown, Search, User, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const NAV_DATA = [
     {
         name: "SHOP",
-        href: "/shop",
+        href: "/shop/",
         subItems: [
-            { name: "클렌징", href: "/shop/cleansing" },
-            { name: "스타일링", href: "/shop/styling" },
-            { name: "트리트먼트", href: "/shop/treatment" },
-            { name: "웨이브펌", href: "/shop/wave-perm" },
+            { name: "클렌징", href: "/shop/cleansing/" },
+            { name: "스타일링", href: "/shop/styling/" },
+            { name: "트리트먼트", href: "/shop/treatment/" },
+            { name: "웨이브펌", href: "/shop/wave-perm/" },
         ]
     },
     {
         name: "SOLUTION",
-        href: "/solution",
+        href: "/solution/",
     },
     {
         name: "COMMUNITY",
-        href: "/community",
+        href: "/community/",
         subItems: [
-            { name: "공지사항", href: "/community/notice" },
-            { name: "상품사용후기", href: "/community/review" },
-            { name: "상품 Q&A", href: "/community/qna" },
-            { name: "단체/대량구매 문의", href: "/community/bulk-inquiry" },
+            { name: "공지사항", href: "/community/notice/" },
+            { name: "상품사용후기", href: "/community/review/" },
+            { name: "상품 Q&A", href: "/community/qna/" },
+            { name: "단체/대량구매 문의", href: "/community/bulk-inquiry/" },
         ]
     },
     {
         name: "ABOUT",
-        href: "/about",
-    },
-    {
-        name: "MYSHOP",
-        href: "/myshop",
-        subItems: [
-            { name: "로그인", href: "/login" },
-            { name: "회원가입", href: "/signup" },
-        ]
+        href: "/about/",
     },
 ];
 
 const Navbar = () => {
+    const { isLoggedIn, user, logout } = useAuth();
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -54,11 +49,13 @@ const Navbar = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isScrolled, setIsScrolled] = useState(false);
     const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
 
     const pathname = usePathname();
     const isHomePage = pathname === "/";
 
     useEffect(() => {
+        setIsMounted(true);
         const handleScroll = () => {
             if (!isHomePage) {
                 setIsScrolled(true);
@@ -72,7 +69,6 @@ const Navbar = () => {
         return () => window.removeEventListener("scroll", handleScroll);
     }, [isHomePage]);
 
-    // Step 2: 실시간 검색 로직 (Debounce 적용)
     useEffect(() => {
         const timer = setTimeout(async () => {
             if (searchQuery.trim().length >= 2) {
@@ -96,7 +92,6 @@ const Navbar = () => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // 검색어 강조 함수 (Step 3)
     const highlightKeyword = (text: string, keyword: string) => {
         if (!keyword.trim()) return text;
         const parts = text.split(new RegExp(`(${keyword})`, 'gi'));
@@ -106,6 +101,14 @@ const Navbar = () => {
                 : part
         );
     };
+
+    const handleLogout = () => {
+        logout();
+        setIsOpen(false);
+        router.push("/");
+    };
+
+    if (!isMounted) return null;
 
     return (
         <nav
@@ -126,7 +129,7 @@ const Navbar = () => {
                     >
                         NB
                     </motion.div>
-                    <span className="relative overflow-hidden group">
+                    <span className="relative overflow-hidden group text-inherit">
                         자연바람
                         <span className={cn(
                             "absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full",
@@ -157,7 +160,6 @@ const Navbar = () => {
                                 )}
                             </Link>
 
-                            {/* Dropdown Menu */}
                             <AnimatePresence>
                                 {menu.subItems && hoveredMenu === menu.name && (
                                     <motion.div
@@ -172,7 +174,7 @@ const Navbar = () => {
                                                 <Link
                                                     key={sub.name}
                                                     href={sub.href}
-                                                    target={('target' in sub) ? (sub.target as string) : undefined}
+                                                    onClick={() => setHoveredMenu(null)}
                                                     className="block px-5 py-3 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium"
                                                 >
                                                     {sub.name}
@@ -184,6 +186,73 @@ const Navbar = () => {
                             </AnimatePresence>
                         </div>
                     ))}
+
+                    {/* MYSHOP Menu */}
+                    <div 
+                        className="relative py-2"
+                        onMouseEnter={() => setHoveredMenu("MYSHOP")}
+                        onMouseLeave={() => setHoveredMenu(null)}
+                    >
+                            <Link
+                                href={isLoggedIn ? "/myshop/" : "/myshop/login/"}
+                                className={cn(
+                                    "flex items-center gap-1 text-[13px] font-bold tracking-widest transition-all hover:opacity-70",
+                                    isScrolled ? "text-brand-text" : "text-white/90"
+                                )}
+                            >
+                                {isLoggedIn ? (user?.name ? `${user.name}님` : "MYSHOP") : "MYSHOP"}
+                                <ChevronDown size={14} className={cn("transition-transform duration-300", hoveredMenu === "MYSHOP" && "rotate-180")} />
+                            </Link>
+
+                        <AnimatePresence>
+                            {hoveredMenu === "MYSHOP" && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-48"
+                                >
+                                    <div className="bg-white rounded-2xl shadow-2xl border border-brand-secondary overflow-hidden py-2 p-1">
+                                        {!isLoggedIn ? (
+                                            <>
+                                                <Link
+                                                    href="/myshop/login/"
+                                                    onClick={() => setHoveredMenu(null)}
+                                                    className="block px-5 py-3 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium"
+                                                >
+                                                    로그인
+                                                </Link>
+                                                <Link
+                                                    href="/myshop/register/"
+                                                    onClick={() => setHoveredMenu(null)}
+                                                    className="block px-5 py-3 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium"
+                                                >
+                                                    회원가입
+                                                </Link>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Link
+                                                    href="/myshop/"
+                                                    onClick={() => setHoveredMenu(null)}
+                                                    className="flex items-center gap-2 px-5 py-3 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium"
+                                                >
+                                                    <User size={14} /> 마이페이지
+                                                </Link>
+                                                <button
+                                                    onClick={handleLogout}
+                                                    className="w-full flex items-center gap-2 px-5 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-all font-medium text-left"
+                                                >
+                                                    <LogOut size={14} /> 로그아웃
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 {/* Icons & Actions */}
@@ -207,14 +276,32 @@ const Navbar = () => {
                     >
                         <Instagram size={18} />
                     </Link>
-                    <button className={cn(
-                        "px-6 py-2.5 rounded-full text-sm font-bold transition-all",
-                        isScrolled 
-                            ? "bg-brand-primary text-white hover:bg-brand-primary/90" 
-                            : "bg-white text-brand-primary hover:bg-white/90"
-                    )}>
-                        시작하기
-                    </button>
+
+                    {!isLoggedIn ? (
+                        <Link 
+                            href="/myshop/register/" 
+                            className={cn(
+                                "px-6 py-2.5 rounded-full text-sm font-bold transition-all inline-block",
+                                isScrolled 
+                                    ? "bg-brand-primary text-white hover:bg-brand-primary/90" 
+                                    : "bg-white text-brand-primary hover:bg-white/90"
+                            )}
+                        >
+                            시작하기
+                        </Link>
+                    ) : (
+                        <button
+                            onClick={handleLogout}
+                            className={cn(
+                                "px-6 py-2.5 rounded-full text-sm font-bold transition-all inline-block",
+                                isScrolled 
+                                    ? "bg-gray-100 text-gray-600 hover:bg-gray-200" 
+                                    : "bg-white/20 text-white hover:bg-white/30"
+                            )}
+                        >
+                            로그아웃
+                        </button>
+                    )}
                 </div>
 
                 {/* Mobile Toggle */}
@@ -244,6 +331,19 @@ const Navbar = () => {
                         className="lg:hidden absolute top-full left-0 right-0 bg-white border-b border-brand-secondary shadow-2xl overflow-hidden font-sans"
                     >
                         <div className="px-6 py-8 flex flex-col gap-8">
+                            {/* User Profile in Mobile */}
+                            {isLoggedIn && (
+                                <div className="flex items-center gap-4 p-4 bg-brand-secondary/30 rounded-2xl">
+                                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-brand-primary border border-brand-secondary shadow-sm">
+                                        <User size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-brand-text">{user?.name}님, 안녕하세요!</p>
+                                        <button onClick={handleLogout} className="text-xs text-red-500 font-medium underline mt-1">로그아웃</button>
+                                    </div>
+                                </div>
+                            )}
+
                             {NAV_DATA.map((menu) => (
                                 <div key={menu.name} className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -261,7 +361,6 @@ const Navbar = () => {
                                                 <Link
                                                     key={sub.name}
                                                     href={sub.href}
-                                                    target={('target' in sub) ? (sub.target as string) : undefined}
                                                     className="text-sm text-gray-500 font-medium py-2 px-3 bg-brand-secondary/50 rounded-lg hover:bg-brand-secondary transition-colors"
                                                     onClick={() => setIsOpen(false)}
                                                 >
@@ -272,6 +371,25 @@ const Navbar = () => {
                                     )}
                                 </div>
                             ))}
+
+                            {/* Mobile MYSHOP */}
+                            <div className="space-y-4">
+                                <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">MYSHOP</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {!isLoggedIn ? (
+                                        <>
+                                            <Link href="/myshop/login/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">로그인</Link>
+                                            <Link href="/myshop/register/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-primary text-white rounded-xl font-bold text-sm">회원가입</Link>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Link href="/myshop/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">마이페이지</Link>
+                                            <button onClick={handleLogout} className="text-center py-4 bg-red-50 text-red-500 rounded-xl font-bold text-sm">로그아웃</button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
                             <hr className="border-brand-secondary" />
                             <div className="flex justify-between items-center pb-4">
                                 <div className="space-y-1">
@@ -287,7 +405,7 @@ const Navbar = () => {
                 )}
             </AnimatePresence>
 
-            {/* Search Overlay */}
+            {/* Search Overlay (생략) */}
             <AnimatePresence>
                 {isSearchOpen && (
                     <motion.div
@@ -304,12 +422,6 @@ const Navbar = () => {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && searchQuery.trim()) {
-                                            window.location.href = `/search?q=${encodeURIComponent(searchQuery)}`;
-                                            setIsSearchOpen(false);
-                                        }
-                                    }}
                                     placeholder="찾으시는 제품명이나 효능을 입력해주세요."
                                     className="w-full pl-16 pr-6 py-5 rounded-full border-2 border-brand-primary/20 focus:border-brand-primary bg-white text-brand-text text-lg outline-none transition-colors placeholder:text-gray-400"
                                     autoFocus
@@ -321,7 +433,6 @@ const Navbar = () => {
                                 )}
                             </div>
 
-                            {/* 실시간 검색 결과 (Step 3) */}
                             <AnimatePresence mode="wait">
                                 {searchResults.length > 0 ? (
                                     <motion.div 
@@ -337,7 +448,7 @@ const Navbar = () => {
                                             {searchResults.map((item: any) => (
                                                 <Link 
                                                     key={item.id}
-                                                    href={`/shop/detail/${item.id}`}
+                                                    href={`/shop/product/${item.id}/`}
                                                     onClick={() => setIsSearchOpen(false)}
                                                     className="flex items-center gap-4 p-4 hover:bg-brand-secondary transition-colors group"
                                                 >
@@ -356,28 +467,14 @@ const Navbar = () => {
                                         </div>
                                     </motion.div>
                                 ) : searchQuery.length >= 2 && !isLoading ? (
-                                    <motion.div 
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="mt-12 text-center py-12"
-                                    >
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-12 text-center py-12">
                                         <p className="text-gray-400 text-lg">"{searchQuery}"에 대한 검색 결과가 없습니다.</p>
                                     </motion.div>
                                 ) : (
-                                    <motion.div 
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="mt-8 flex flex-wrap gap-2 items-center text-sm"
-                                    >
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8 flex flex-wrap gap-2 items-center text-sm">
                                         <span className="font-bold text-brand-primary mr-3">인기 검색어</span>
                                         {["트리트먼트", "두피스파", "스타일링", "웨이브펌"].map((tag) => (
-                                            <button 
-                                                key={tag}
-                                                onClick={() => setSearchQuery(tag)}
-                                                className="px-5 py-2 rounded-full border border-gray-200 text-brand-text bg-white hover:border-brand-primary hover:text-brand-primary hover:bg-brand-secondary/30 transition-colors"
-                                            >
-                                                {tag}
-                                            </button>
+                                            <button key={tag} onClick={() => setSearchQuery(tag)} className="px-5 py-2 rounded-full border border-gray-200 text-brand-text bg-white hover:border-brand-primary hover:text-brand-primary hover:bg-brand-secondary/30 transition-colors">{tag}</button>
                                         ))}
                                     </motion.div>
                                 )}
@@ -391,4 +488,3 @@ const Navbar = () => {
 };
 
 export default Navbar;
-

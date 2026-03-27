@@ -6,7 +6,7 @@ function in_all($needle, $haystack) {
 }
 
 // 프론트엔드 공개 API 액션 목록
-$public_actions = ['get_reviews', 'view_review', 'add_review', 'get_products', 'get_qna_list', 'check_qna_auth', 'save_qna', 'view_qna'];
+$public_actions = ['get_reviews', 'view_review', 'add_review', 'get_products', 'get_qna_list', 'check_qna_auth', 'save_qna', 'view_qna', 'search'];
 $current_action = isset($_GET['action']) ? $_GET['action'] : (isset($_POST['action']) ? $_POST['action'] : null);
 
 if (!isset($_SESSION['admin_logged_in']) && !in_all($current_action, $public_actions)) {
