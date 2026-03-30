@@ -586,6 +586,85 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
         }
         exit;
     }
+
+    // J. 회원 정보 수정 (AJAX)
+    if ($action === 'update_member' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $id = (int)$_POST['id'];
+        $name = $_POST['name'];
+        $email = $_POST['email'];
+        $phone = $_POST['phone'];
+        $zipcode = $_POST['zipcode'];
+        $address = $_POST['address'];
+        $detail_address = $_POST['detail_address'];
+
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ?, phone = ?, zipcode = ?, address = ?, detail_address = ? WHERE id = ?");
+            $stmt->execute([$name, $email, $phone, $zipcode, $address, $detail_address, $id]);
+            echo json_encode(['success' => true, 'message' => '회원 정보가 수정되었습니다.']);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // K. 회원 삭제
+    if ($action === 'delete_member' && isset($_GET['id'])) {
+        $id = (int)$_GET['id'];
+        try {
+            $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
+            echo "<script>alert('회원이 삭제되었습니다.'); location.href='admin_products.php?tab=manage-member';</script>";
+        } catch (Exception $e) {
+            echo "<script>alert('삭제 실패: " . $e->getMessage() . "'); history.back();</script>";
+        }
+        exit;
+    }
+
+    // L. 비밀번호 초기화 (로컬 회원 전용 AJAX)
+    if ($action === 'reset_member_password' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $id = (int)$_POST['id'];
+        $new_password = $_POST['new_password'];
+
+        try {
+            $stmt = $pdo->prepare("SELECT provider FROM users WHERE id = ?");
+            $stmt->execute([$id]);
+            $user = $stmt->fetch();
+
+            if ($user && $user['provider'] !== 'local') {
+                throw new Exception('소셜 로그인 회원은 비밀번호를 초기화할 수 없습니다.');
+            }
+
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+            $stmt->execute([$hashed_password, $id]);
+            echo json_encode(['success' => true, 'message' => '비밀번호가 초기화되었습니다.']);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // M. 회원 목록 CSV 내보내기
+    if ($action === 'export_members') {
+        try {
+            $stmt = $pdo->query("SELECT id, username, name, email, phone, provider, created_at FROM users ORDER BY id DESC");
+            $members = $stmt->fetchAll();
+
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename=members_' . date('Ymd') . '.csv');
+            
+            $output = fopen('php://output', 'w');
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM
+            
+            fputcsv($output, ['번호', '아이디', '이름', '이메일', '전화번호', '가입유형', '가입일']);
+            foreach ($members as $m) {
+                fputcsv($output, [$m['id'], $m['username'], $m['name'], $m['email'], $m['phone'], $m['provider'], $m['created_at']]);
+            }
+            fclose($output);
+        } catch (Exception $e) {
+            echo "Export failed: " . $e->getMessage();
+        }
+        exit;
+    }
 }
 
 $active_tab = $_GET['tab'] ?? 'dashboard';
@@ -609,6 +688,83 @@ $qnas = $pdo->query("
     ORDER BY q.created_at DESC
 ")->fetchAll();
 
+// 차트용 통계 데이터 추출
+$cat_dist = $pdo->query("SELECT c.name, COUNT(p.id) as cnt FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id ORDER BY cnt DESC")->fetchAll();
+$cat_names = array_column($cat_dist, 'name');
+$cat_cnts = array_column($cat_dist, 'cnt');
+
+$monthly_stats = [];
+for ($i = 5; $i >= 0; $i--) {
+    $month = date('Y-m', strtotime("-$i months"));
+    $q_cnt = $pdo->query("SELECT COUNT(*) FROM product_qna WHERE created_at LIKE '$month%' AND parent_id IS NULL")->fetchColumn();
+    $r_cnt = $pdo->query("SELECT COUNT(*) FROM product_reviews WHERE created_at LIKE '$month%'")->fetchColumn();
+    $monthly_stats[] = ['month' => date('M', strtotime("-$i months")), 'qna' => (int)$q_cnt, 'review' => (int)$r_cnt];
+}
+$month_labels = array_column($monthly_stats, 'month');
+$month_qna = array_column($monthly_stats, 'qna');
+$month_rev = array_column($monthly_stats, 'review');
+
+// 회원 통계 및 데이터 로드
+$member_stats = [
+    'total' => $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn(),
+    'local' => $pdo->query("SELECT COUNT(*) FROM users WHERE provider = 'local'")->fetchColumn(),
+    'social' => $pdo->query("SELECT COUNT(*) FROM users WHERE provider != 'local'")->fetchColumn(),
+    'new_month' => $pdo->query("SELECT COUNT(*) FROM users WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn()
+];
+
+// 회원 관리 탭 데이터
+if ($active_tab === 'manage-member') {
+    $search = $_GET['search'] ?? '';
+    $provider = $_GET['provider'] ?? '';
+    $page = (int)($_GET['page'] ?? 1);
+    $limit = 15;
+    $offset = ($page - 1) * $limit;
+
+    $where = ["1=1"];
+    $params = [];
+    if ($search) {
+        $where[] = "(username LIKE ? OR name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+    if ($provider) {
+        $where[] = "provider = ?";
+        $params[] = $provider;
+    }
+    $where_sql = implode(" AND ", $where);
+
+    $total_members = $pdo->prepare("SELECT COUNT(*) FROM users WHERE $where_sql");
+    $total_members->execute($params);
+    $total_members_count = $total_members->fetchColumn();
+    $total_pages = ceil($total_members_count / $limit);
+
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE $where_sql ORDER BY id DESC LIMIT ? OFFSET ?");
+    $p_idx = 1;
+    foreach($params as $p) $stmt->bindValue($p_idx++, $p);
+    $stmt->bindValue($p_idx++, $limit, PDO::PARAM_INT);
+    $stmt->bindValue($p_idx++, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $member_list = $stmt->fetchAll();
+}
+
+// 회원 상세 탭 데이터
+if ($active_tab === 'member-detail' && isset($_GET['id'])) {
+    $member_id = (int)$_GET['id'];
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt->execute([$member_id]);
+    $member_detail = $stmt->fetch();
+
+    if ($member_detail) {
+        $member_detail['activity'] = [
+            'reviews' => $pdo->query("SELECT COUNT(*) FROM product_reviews WHERE author_name = " . $pdo->quote($member_detail['name']))->fetchColumn(),
+            'qna' => $pdo->query("SELECT COUNT(*) FROM product_qna WHERE author = " . $pdo->quote($member_detail['name']))->fetchColumn(),
+            'bulk' => $pdo->query("SELECT COUNT(*) FROM bulk_purchase_inquiry WHERE author = " . $pdo->quote($member_detail['name']))->fetchColumn()
+        ];
+    }
+}
+
 // 수정용 데이터 로드
 $edit_data = null;
 if ($active_tab === 'edit-product' && isset($_GET['id'])) {
@@ -624,6 +780,7 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JAYEONBARAM | 관리자 모드</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --brand-primary: #0A3D2E; --brand-secondary: #f8fafc; --sidebar-width: 260px; --success: #10b981; }
         body { margin: 0; font-family: 'Pretendard', sans-serif; background: #f1f5f9; display: flex; color: #1e293b; }
@@ -635,8 +792,20 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-        .stat-card { background: white; padding: 25px; border-radius: 20px; border-left: 5px solid #e2e8f0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 25px; border-radius: 24px; position: relative; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.02); transition: transform 0.3s; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .stat-icon { position: absolute; right: 20px; top: 20px; width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .stat-label { font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 8px; display: block; }
+        .stat-value { font-size: 28px; font-weight: 800; color: #1e293b; margin-bottom: 10px; }
+        .stat-trend { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+        .trend-up { color: var(--success); }
+        .trend-down { color: #ef4444; }
+        
+        .chart-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 25px; margin-bottom: 25px; }
+        .chart-card { background: white; padding: 30px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .chart-title { font-size: 16px; font-weight: 800; color: #1e293b; }
         .form-card { background: white; padding: 40px; border-radius: 20px; }
         .form-group-title { font-size: 14px; font-weight: 800; color: var(--brand-primary); margin: 30px 0 20px 0; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
         .form-control { margin-bottom: 15px; }
@@ -650,6 +819,27 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
         .btn-action { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; }
         .btn-edit { background: #f1f5f9; color: #475569; }
         .btn-delete { background: #fee2e2; color: #ef4444; }
+
+        /* 회원 관리 스타일 */
+        .member-row { display: grid; grid-template-columns: 60px 100px 120px 1fr 120px 100px 140px 140px; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; align-items: center; text-align: center; font-size: 13px; }
+        .badge-local { padding: 4px 10px; background: #f1f5f9; color: #475569; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-google { padding: 4px 10px; background: #fee2e2; color: #ef4444; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-kakao { padding: 4px 10px; background: #fef3c7; color: #92400e; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .member-filter-bar { display: flex; gap: 15px; background: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; align-items: center; }
+        .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 30px; padding-bottom: 20px; }
+        .page-link { padding: 8px 15px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; text-decoration: none; color: #475569; font-size: 13px; font-weight: 600; }
+        .page-link.active { background: var(--brand-primary); color: white; border-color: var(--brand-primary); }
+        
+        .member-detail-grid { display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
+        .member-info-card { background: white; padding: 30px; border-radius: 20px; }
+        .member-info-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f8fafc; font-size: 14px; }
+        .member-info-label { width: 120px; font-weight: 700; color: #64748b; }
+        .member-info-value { flex: 1; color: #1e293b; }
+        
+        .activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .activity-card { background: white; padding: 20px; border-radius: 15px; text-align: center; border: 1px solid #f1f5f9; }
+        .activity-stat { font-size: 24px; font-weight: 800; color: var(--brand-primary); margin-top: 5px; }
+        .profile-img-large { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; margin: 0 auto 20px; display: block; background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -662,6 +852,7 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             <a href="admin_products.php?tab=manage-review" class="menu-item <?= $active_tab=='manage-review'?'active':'' ?>"><i class="fas fa-star"></i> 후기 관리</a>
             <a href="admin_products.php?tab=manage-qna" class="menu-item <?= $active_tab=='manage-qna'?'active':'' ?>"><i class="fas fa-question-circle"></i> 상품 Q&A 관리</a>
             <a href="admin_products.php?tab=manage-bulk" class="menu-item <?= $active_tab=='manage-bulk'?'active':'' ?>"><i class="fas fa-handshake"></i> 대량구매 문의</a>
+            <a href="admin_products.php?tab=manage-member" class="menu-item <?= ($active_tab=='manage-member'||$active_tab=='member-detail')?'active':'' ?>"><i class="fas fa-users"></i> 회원 관리</a>
             <a href="admin_products.php?tab=manage-notice" class="menu-item <?= $active_tab=='manage-notice'?'active':'' ?>"><i class="fas fa-bullhorn"></i> 공지사항 관리</a>
         </div>
     </nav>
@@ -671,10 +862,77 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
         <div class="tab-content <?= $active_tab=='dashboard'?'active':'' ?>">
             <div class="header"><h1>오늘의 현황</h1><div class="version">관리자 모드 v1.2</div></div>
             <div class="stats-grid">
-                <div class="stat-card" style="border-left-color: var(--brand-primary);"><span style="font-size:12px; font-weight:700; color:#64748b;">등록 상품 수</span><div style="font-size:28px; font-weight:800;"><?= $product_count ?>개</div></div>
-                <div class="stat-card" style="border-left-color: #f59e0b;"><span style="font-size:12px; font-weight:700; color:#64748b;">Q&A 문의</span><div style="font-size:28px; font-weight:800;"><?= $qna_count ?>건</div></div>
-                <div class="stat-card" style="border-left-color: var(--success);"><span style="font-size:12px; font-weight:700; color:#64748b;">상품 후기</span><div style="font-size:28px; font-weight:800;"><?= $review_count ?>개</div></div>
-                <div class="stat-card" style="border-left-color: #3b82f6;"><span style="font-size:12px; font-weight:700; color:#64748b;">대량구매 문의</span><div style="font-size:28px; font-weight:800;"><?= $bulk_inquiry_count ?>건</div></div>
+                <div class="stat-card" onclick="location.href='admin_products.php?tab=manage-member'" style="cursor:pointer;">
+                    <div class="stat-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;"><i class="fas fa-users"></i></div>
+                    <span class="stat-label">총 회원 수</span>
+                    <div class="stat-value"><?= number_format($member_stats['total']) ?></div>
+                    <div class="stat-trend trend-up"><i class="fas fa-caret-up"></i> 12.5% <span style="color:#94a3b8; font-weight:500;">vs last month</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: rgba(10, 61, 46, 0.1); color: var(--brand-primary);"><i class="fas fa-box"></i></div>
+                    <span class="stat-label">등록 상품 수</span>
+                    <div class="stat-value"><?= $product_count ?></div>
+                    <div class="stat-trend trend-up"><i class="fas fa-caret-up"></i> 2.1% <span style="color:#94a3b8; font-weight:500;">vs last month</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fas fa-question-circle"></i></div>
+                    <span class="stat-label">Q&A 문의</span>
+                    <div class="stat-value"><?= $qna_count ?></div>
+                    <div class="stat-trend trend-down"><i class="fas fa-caret-down"></i> 5.2% <span style="color:#94a3b8; font-weight:500;">vs last month</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="fas fa-star"></i></div>
+                    <span class="stat-label">상품 후기</span>
+                    <div class="stat-value"><?= $review_count ?></div>
+                    <div class="stat-trend trend-up"><i class="fas fa-caret-up"></i> 8.4% <span style="color:#94a3b8; font-weight:500;">vs last month</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;"><i class="fas fa-handshake"></i></div>
+                    <span class="stat-label">대량구매 문의</span>
+                    <div class="stat-value"><?= $bulk_inquiry_count ?></div>
+                    <div class="stat-trend trend-up"><i class="fas fa-caret-up"></i> 14.2% <span style="color:#94a3b8; font-weight:500;">vs last month</span></div>
+                </div>
+            </div>
+
+            <!-- 차트 섹션 -->
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <div class="chart-header"><div class="chart-title">상품 카테고리 분포</div></div>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header"><div class="chart-title">최근 6개월 문의/후기 추이</div></div>
+                    <div style="height: 300px;">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid" style="grid-template-columns: 2fr 1fr;">
+                <div class="chart-card">
+                    <div class="chart-header"><div class="chart-title">회원 가입 유형 분포</div></div>
+                    <div style="height: 300px;">
+                        <canvas id="memberDistChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card" style="background: var(--brand-primary); color: white; display: flex; flex-direction: column; justify-content: center;">
+                    <div class="chart-header"><div class="chart-title" style="color: white;">통계 요약</div></div>
+                    <div style="padding: 10px 0;">
+                        <div style="margin-bottom: 25px;">
+                            <div style="font-size: 13px; opacity: 0.7; margin-bottom: 5px;">현재 가장 많은 카테고리</div>
+                            <div style="font-size: 22px; font-weight: 800;"><?= !empty($cat_dist) ? $cat_dist[0]['name'] : '-' ?></div>
+                        </div>
+                        <div style="margin-bottom: 25px;">
+                            <div style="font-size: 13px; opacity: 0.7; margin-bottom: 5px;">이번 달 신규 가입자</div>
+                            <div style="font-size: 22px; font-weight: 800;"><?= $member_stats['new_month'] ?>명</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; font-size: 12px; line-height: 1.6; opacity: 0.9;">
+                            데이터는 실시간으로 업데이트되며, 상세 내역은 각 관리 메뉴에서 확인하실 수 있습니다.
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -906,6 +1164,172 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
             </div>
         </div>
 
+        <!-- 회원 관리 목록 -->
+        <div class="tab-content <?= $active_tab=='manage-member'?'active':'' ?>">
+            <div class="header"><h1>회원 관리</h1><div class="version">관리자 모드 v1.2</div></div>
+            
+            <div style="display:flex; gap:15px; margin-bottom:20px;">
+                <div class="stat-card" style="flex:1; border-left-color: var(--brand-primary);">
+                    <span style="font-size:12px; font-weight:700; color:#64748b;">전체 회원</span>
+                    <div style="font-size:24px; font-weight:800;"><?= number_format($member_stats['total']) ?>명</div>
+                </div>
+                <div class="stat-card" style="flex:1; border-left-color: #475569;">
+                    <span style="font-size:12px; font-weight:700; color:#64748b;">일반 회원</span>
+                    <div style="font-size:24px; font-weight:800;"><?= number_format($member_stats['local']) ?>명</div>
+                </div>
+                <div class="stat-card" style="flex:1; border-left-color: #ef4444;">
+                    <span style="font-size:12px; font-weight:700; color:#64748b;">소셜 회원</span>
+                    <div style="font-size:24px; font-weight:800;"><?= number_format($member_stats['social']) ?>명</div>
+                </div>
+                <div class="stat-card" style="flex:1; border-left-color: var(--success);">
+                    <span style="font-size:12px; font-weight:700; color:#64748b;">이달 신규</span>
+                    <div style="font-size:24px; font-weight:800;"><?= number_format($member_stats['new_month']) ?>명</div>
+                </div>
+            </div>
+
+            <form method="GET" class="member-filter-bar">
+                <input type="hidden" name="tab" value="manage-member">
+                <input type="text" name="search" value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" placeholder="아이디, 이름, 이메일, 전화번호 검색" style="flex:1; padding:10px; border:1px solid #e2e8f0; border-radius:8px;">
+                <select name="provider" style="padding:10px; border:1px solid #e2e8f0; border-radius:8px; width:120px;">
+                    <option value="">가입유형</option>
+                    <option value="local" <?= ($_GET['provider'] ?? '') == 'local' ? 'selected' : '' ?>>일반</option>
+                    <option value="google" <?= ($_GET['provider'] ?? '') == 'google' ? 'selected' : '' ?>>Google</option>
+                    <option value="kakao" <?= ($_GET['provider'] ?? '') == 'kakao' ? 'selected' : '' ?>>Kakao</option>
+                </select>
+                <button type="submit" class="btn-submit" style="width:auto; padding:10px 25px;">검색</button>
+                <button type="button" onclick="location.href='admin_products.php?action=export_members'" class="btn-action btn-edit" style="padding:10px 20px;"><i class="fas fa-file-csv"></i> CSV 내보내기</button>
+            </form>
+
+            <div class="card">
+                <div class="member-row" style="font-weight: 800; background: #f8fafc; font-size: 12px;">
+                    <div>번호</div><div>아이디</div><div>이름</div><div>이메일</div><div>전화번호</div><div>유형</div><div>가입일</div><div>관리</div>
+                </div>
+                <?php if(empty($member_list)): ?>
+                    <div style="padding:50px; text-align:center; color:#94a3b8;">가입된 회원이 없습니다.</div>
+                <?php else: ?>
+                    <?php foreach($member_list as $m): ?>
+                        <div class="member-row">
+                            <div><?= $m['id'] ?></div>
+                            <div style="font-weight:600; text-align:left;"><?= htmlspecialchars($m['username']) ?></div>
+                            <div style="font-weight:600;"><?= htmlspecialchars($m['name']) ?></div>
+                            <div style="text-align:left; font-size:12px; color:#64748b;"><?= htmlspecialchars($m['email']) ?></div>
+                            <div style="font-size:12px;"><?= htmlspecialchars($m['phone']) ?></div>
+                            <div>
+                                <?php if($m['provider'] === 'google'): ?>
+                                    <span class="badge-google"><i class="fab fa-google"></i> Google</span>
+                                <?php elseif($m['provider'] === 'kakao'): ?>
+                                    <span class="badge-kakao"><i class="fas fa-comment"></i> Kakao</span>
+                                <?php else: ?>
+                                    <span class="badge-local">일반</span>
+                                <?php endif; ?>
+                            </div>
+                            <div style="font-size:11px; color:#94a3b8;"><?= substr($m['created_at'], 0, 10) ?></div>
+                            <div class="actions">
+                                <button class="btn-action btn-edit" onclick="location.href='admin_products.php?tab=member-detail&id=<?= $m['id'] ?>'">상세</button>
+                                <button class="btn-action btn-delete" onclick="if(confirm('정말 이 회원을 삭제하시겠습니까? 관련 데이터가 모두 삭제될 수 있습니다.')) location.href='admin_products.php?action=delete_member&id=<?= $m['id'] ?>'">삭제</button>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <?php if(isset($total_pages) && $total_pages > 1): ?>
+                <div class="pagination">
+                    <?php for($i=1; $i<=$total_pages; $i++): ?>
+                        <a href="admin_products.php?tab=manage-member&page=<?= $i ?>&search=<?= urlencode($_GET['search'] ?? '') ?>&provider=<?= urlencode($_GET['provider'] ?? '') ?>" class="page-link <?= $page == $i ? 'active' : '' ?>"><?= $i ?></a>
+                    <?php endfor; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- 회원 상세 정보 및 수정 -->
+        <div class="tab-content <?= $active_tab=='member-detail'?'active':'' ?>">
+            <div class="header">
+                <h1>회원 상세 정보</h1>
+                <button class="btn-action btn-edit" onclick="location.href='admin_products.php?tab=manage-member'"><i class="fas fa-list"></i> 목록으로</button>
+            </div>
+
+            <?php if(!isset($member_detail)): ?>
+                <div class="card" style="padding:100px; text-align:center; color:#94a3b8;">회원 정보를 찾을 수 없습니다.</div>
+            <?php else: ?>
+                <div class="member-detail-grid">
+                    <div class="member-info-column">
+                        <div class="activity-stats">
+                            <div class="activity-card">
+                                <div style="font-size:12px; font-weight:700; color:#64748b;">작성 후기</div>
+                                <div class="activity-stat"><?= number_format($member_detail['activity']['reviews'] ?? 0) ?></div>
+                            </div>
+                            <div class="activity-card">
+                                <div style="font-size:12px; font-weight:700; color:#64748b;">Q&A 문의</div>
+                                <div class="activity-stat"><?= number_format($member_detail['activity']['qna'] ?? 0) ?></div>
+                            </div>
+                            <div class="activity-card">
+                                <div style="font-size:12px; font-weight:700; color:#64748b;">대량구매 문의</div>
+                                <div class="activity-stat"><?= number_format($member_detail['activity']['bulk'] ?? 0) ?></div>
+                            </div>
+                        </div>
+
+                        <div class="form-card">
+                            <div class="form-group-title">기본 정보 수정</div>
+                            <form id="member-edit-form">
+                                <input type="hidden" name="id" value="<?= $member_detail['id'] ?>">
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                                    <div class="form-control"><label>이름</label><input type="text" name="name" value="<?= htmlspecialchars($member_detail['name']) ?>" required></div>
+                                    <div class="form-control"><label>이메일</label><input type="email" name="email" value="<?= htmlspecialchars($member_detail['email']) ?>" required></div>
+                                </div>
+                                <div class="form-control"><label>전화번호</label><input type="text" name="phone" value="<?= htmlspecialchars($member_detail['phone']) ?>"></div>
+                                <div class="form-control" style="width:200px;"><label>우편번호</label><input type="text" name="zipcode" value="<?= htmlspecialchars($member_detail['zipcode']) ?>"></div>
+                                <div class="form-control"><label>주소</label><input type="text" name="address" value="<?= htmlspecialchars($member_detail['address']) ?>"></div>
+                                <div class="form-control"><label>상세주소</label><input type="text" name="detail_address" value="<?= htmlspecialchars($member_detail['detail_address']) ?>"></div>
+                                <button type="button" onclick="updateMember()" class="btn-submit" style="margin-top:10px;">정보 수정 저장</button>
+                            </form>
+
+                            <?php if($member_detail['provider'] === 'local'): ?>
+                            <div class="form-group-title" style="margin-top:40px; color:#ef4444;">비밀번호 초기화</div>
+                            <form id="password-reset-form">
+                                <input type="hidden" name="id" value="<?= $member_detail['id'] ?>">
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                                    <div class="form-control"><label>새 비밀번호</label><input type="password" id="new_password" name="new_password" required></div>
+                                    <div class="form-control"><label>비밀번호 확인</label><input type="password" id="confirm_password" required></div>
+                                </div>
+                                <button type="button" onclick="resetMemberPassword()" class="btn-submit" style="margin-top:10px; background:#ef4444;">비밀번호 변경</button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="member-profile-column">
+                        <div class="member-info-card">
+                            <img src="<?= $member_detail['profile_image'] ?: 'https://placehold.co/200x200?text=' . urlencode($member_detail['name']) ?>" class="profile-img-large">
+                            <div style="text-align:center; margin-bottom:30px;">
+                                <div style="font-size:20px; font-weight:800;"><?= htmlspecialchars($member_detail['name']) ?></div>
+                                <div style="color:#64748b; font-size:14px;"><?= htmlspecialchars($member_detail['username']) ?></div>
+                                <div style="margin-top:10px;">
+                                    <?php if($member_detail['provider'] === 'google'): ?>
+                                        <span class="badge-google"><i class="fab fa-google"></i> Google 계정</span>
+                                    <?php elseif($member_detail['provider'] === 'kakao'): ?>
+                                        <span class="badge-kakao"><i class="fas fa-comment"></i> Kakao 계정</span>
+                                    <?php else: ?>
+                                        <span class="badge-local">일반 계정</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="member-info-row">
+                                <div class="member-info-label">번호</div><div class="member-info-value"><?= $member_detail['id'] ?></div>
+                            </div>
+                            <div class="member-info-row">
+                                <div class="member-info-label">가입일</div><div class="member-info-value"><?= $member_detail['created_at'] ?></div>
+                            </div>
+                            <div class="member-info-row" style="border-bottom:none; margin-top:30px;">
+                                <button class="btn-action btn-delete" style="width:100%; padding:12px;" onclick="if(confirm('정말 이 회원을 삭제하시겠습니까?')) location.href='admin_products.php?action=delete_member&id=<?= $member_detail['id'] ?>'">회원 영구 삭제</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+
         <!-- 공지사항 관리 -->
         <div class="tab-content <?= $active_tab=='manage-notice'?'active':'' ?>">
             <div class="header"><h1>공지사항 관리</h1><div class="version">관리자 모드 v1.2</div></div>
@@ -951,6 +1375,60 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
         </div>
     </main>
     <script>
+        function updateMember() {
+            const form = document.getElementById('member-edit-form');
+            const formData = new FormData(form);
+            formData.append('action', 'update_member');
+
+            fetch('admin_products.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(result => {
+                alert(result.message);
+                if (result.success) location.reload();
+            })
+            .catch(err => {
+                console.error(err);
+                alert('수정 중 오류가 발생했습니다.');
+            });
+        }
+
+        function resetMemberPassword() {
+            const newPassword = document.getElementById('new_password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+
+            if (!newPassword) {
+                alert('새 비밀번호를 입력해주세요.');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                alert('비밀번호가 일치하지 않습니다.');
+                return;
+            }
+
+            if (!confirm('비밀번호를 초기화하시겠습니까?')) return;
+
+            const form = document.getElementById('password-reset-form');
+            const formData = new FormData(form);
+            formData.append('action', 'reset_member_password');
+
+            fetch('admin_products.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(result => {
+                alert(result.message);
+                if (result.success) location.reload();
+            })
+            .catch(err => {
+                console.error(err);
+                alert('초기화 중 오류가 발생했습니다.');
+            });
+        }
+
         function editNotice(notice) {
             document.getElementById('notice-form-title').innerText = '공지사항 수정 (ID: ' + notice.id + ')';
             document.getElementById('notice_id').value = notice.id;
@@ -1027,6 +1505,84 @@ if ($active_tab === 'edit-product' && isset($_GET['id'])) {
         if (tab === 'manage-notice') {
             // 필요 시 추가적인 탭 전환 로직 작성 가능
         }
+
+        // 대시보드 차트 초기화
+        <?php if($active_tab == 'dashboard'): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. 카테고리 분포 차트
+            new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: <?= json_encode($cat_names) ?>,
+                    datasets: [{
+                        data: <?= json_encode($cat_cnts) ?>,
+                        backgroundColor: ['#0A3D2E', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#6366f1'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 11, weight: '600' } } } },
+                    cutout: '70%'
+                }
+            });
+
+            // 2. 활동 추이 차트
+            new Chart(document.getElementById('activityChart'), {
+                type: 'bar',
+                data: {
+                    labels: <?= json_encode($month_labels) ?>,
+                    datasets: [
+                        {
+                            label: 'Q&A 문의',
+                            data: <?= json_encode($month_qna) ?>,
+                            backgroundColor: '#10b981',
+                            borderRadius: 6
+                        },
+                        {
+                            label: '상품 후기',
+                            data: <?= json_encode($month_rev) ?>,
+                            backgroundColor: '#6366f1',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [5, 5], drawBorder: false } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, font: { weight: '600' } } } }
+                }
+            });
+
+            // 3. 회원 분포 차트
+            new Chart(document.getElementById('memberDistChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['일반 회원', '소셜 회원'],
+                    datasets: [{
+                        label: '회원 수',
+                        data: [<?= $member_stats['local'] ?>, <?= $member_stats['social'] ?>],
+                        backgroundColor: ['#0A3D2E', '#f59e0b'],
+                        borderRadius: 8,
+                        barThickness: 60
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, grid: { borderDash: [5, 5], drawBorder: false } },
+                        y: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        });
+        <?php endif; ?>
     </script>
 </body>
 </html>

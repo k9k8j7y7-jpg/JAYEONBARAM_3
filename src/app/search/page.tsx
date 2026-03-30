@@ -102,7 +102,7 @@ const SearchContent = () => {
                                 transition={{ delay: index * 0.1 }}
                                 className="group cursor-pointer relative"
                             >
-                                <Link href={`/shop/product/${product.id}`}>
+                                <Link href={`/shop/product/${product.id}/`}>
                                     <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-secondary mb-6 shadow-sm">
                                         <Image
                                             src={product.image_url || "/images/placeholder.jpg"}
@@ -141,7 +141,7 @@ const SearchContent = () => {
                                 <h3 className="text-xl font-bold text-brand-text mb-8 text-left">추천 상품</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                                     {recommendations.map((product) => (
-                                        <Link key={product.id} href={`/shop/product/${product.id}`} className="group text-left">
+                                        <Link key={product.id} href={`/shop/product/${product.id}/`} className="group text-left">
                                             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-secondary mb-4">
                                                 <Image
                                                     src={product.image_url}

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Instagram, ChevronDown, Search, User, LogOut } from "lucide-react";
+import { Menu, X, Instagram, ChevronDown, Search, User, LogOut, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -106,6 +106,17 @@ const Navbar = () => {
         logout();
         setIsOpen(false);
         router.push("/");
+    };
+
+    const setGoogleTranslateCookie = (lang: string) => {
+        if (lang === 'ko') {
+            document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=.' + window.location.hostname + '; path=/;';
+        } else {
+            document.cookie = `googtrans=/ko/${lang}; path=/`;
+            document.cookie = `googtrans=/ko/${lang}; domain=.${window.location.hostname}; path=/`;
+        }
+        window.location.reload();
     };
 
     if (!isMounted) return null;
@@ -257,6 +268,39 @@ const Navbar = () => {
 
                 {/* Icons & Actions */}
                 <div className="hidden lg:flex items-center gap-6">
+                    <div 
+                        className="relative py-2 flex items-center justify-center cursor-pointer"
+                        onMouseEnter={() => setHoveredMenu("LANG")}
+                        onMouseLeave={() => setHoveredMenu(null)}
+                    >
+                        <div className={cn(
+                            "p-2.5 rounded-full transition-all flex items-center gap-1.5",
+                            isScrolled ? "text-brand-primary hover:bg-brand-secondary/50" : "text-white hover:bg-white/10"
+                        )}>
+                            <Globe size={18} />
+                            <span className="text-xs font-bold leading-none mt-0.5">KOR</span>
+                            <ChevronDown size={12} className={cn("transition-transform duration-300", hoveredMenu === "LANG" && "rotate-180")} />
+                        </div>
+
+                        <AnimatePresence>
+                            {hoveredMenu === "LANG" && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-32 z-50"
+                                >
+                                    <div className="bg-white rounded-2xl shadow-2xl border border-brand-secondary overflow-hidden py-2 p-1">
+                                        <button onClick={() => setGoogleTranslateCookie('ko')} className="w-full text-left px-4 py-2 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium">한국어 (KR)</button>
+                                        <button onClick={() => setGoogleTranslateCookie('en')} className="w-full text-left px-4 py-2 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium">English (EN)</button>
+                                        <button onClick={() => setGoogleTranslateCookie('ja')} className="w-full text-left px-4 py-2 text-sm text-brand-text hover:bg-brand-secondary hover:text-brand-primary rounded-xl transition-all font-medium">日本語 (JP)</button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
                     <button 
                         onClick={() => { setIsSearchOpen(!isSearchOpen); setIsOpen(false); }}
                         className={cn(
@@ -279,7 +323,9 @@ const Navbar = () => {
 
                     {!isLoggedIn ? (
                         <Link 
-                            href="/myshop/register/" 
+                            href="https://jayeonbaram.com/brochure/" 
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className={cn(
                                 "px-6 py-2.5 rounded-full text-sm font-bold transition-all inline-block",
                                 isScrolled 
@@ -287,7 +333,7 @@ const Navbar = () => {
                                     : "bg-white text-brand-primary hover:bg-white/90"
                             )}
                         >
-                            시작하기
+                            brochure
                         </Link>
                     ) : (
                         <button
@@ -372,21 +418,32 @@ const Navbar = () => {
                                 </div>
                             ))}
 
-                            {/* Mobile MYSHOP */}
-                            <div className="space-y-4">
-                                <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">MYSHOP</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {!isLoggedIn ? (
-                                        <>
-                                            <Link href="/myshop/login/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">로그인</Link>
-                                            <Link href="/myshop/register/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-primary text-white rounded-xl font-bold text-sm">회원가입</Link>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Link href="/myshop/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">마이페이지</Link>
-                                            <button onClick={handleLogout} className="text-center py-4 bg-red-50 text-red-500 rounded-xl font-bold text-sm">로그아웃</button>
-                                        </>
-                                    )}
+                            {/* Mobile MYSHOP & LANG */}
+                            <div className="space-y-8">
+                                <div className="space-y-4">
+                                    <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">LANGUAGE</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => setGoogleTranslateCookie('ko')} className="text-center py-3 bg-brand-secondary/50 hover:bg-brand-secondary transition-colors rounded-xl font-bold text-brand-text text-sm">한국어</button>
+                                        <button onClick={() => setGoogleTranslateCookie('en')} className="text-center py-3 bg-brand-secondary/50 hover:bg-brand-secondary transition-colors rounded-xl font-bold text-brand-text text-sm">English</button>
+                                        <button onClick={() => setGoogleTranslateCookie('ja')} className="text-center py-3 bg-brand-secondary/50 hover:bg-brand-secondary transition-colors rounded-xl font-bold text-brand-text text-sm">日本語</button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">MYSHOP</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {!isLoggedIn ? (
+                                            <>
+                                                <Link href="/myshop/login/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">로그인</Link>
+                                                <Link href="https://jayeonbaram.com/brochure/" target="_blank" rel="noopener noreferrer" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-primary text-white rounded-xl font-bold text-sm">brochure</Link>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Link href="/myshop/" onClick={() => setIsOpen(false)} className="text-center py-4 bg-brand-secondary/50 rounded-xl font-bold text-brand-text text-sm">마이페이지</Link>
+                                                <button onClick={handleLogout} className="text-center py-4 bg-red-50 text-red-500 rounded-xl font-bold text-sm">로그아웃</button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -418,10 +475,16 @@ const Navbar = () => {
                         <div className="max-w-4xl mx-auto px-6 pt-12 pb-16 flex flex-col">
                             <div className="w-full relative shadow-sm hover:shadow-md transition-shadow duration-300 rounded-full">
                                 <Search size={24} className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-primary" />
-                                <input 
+                                <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && searchQuery.trim().length >= 2) {
+                                            setIsSearchOpen(false);
+                                            router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                                        }
+                                    }}
                                     placeholder="찾으시는 제품명이나 효능을 입력해주세요."
                                     className="w-full pl-16 pr-6 py-5 rounded-full border-2 border-brand-primary/20 focus:border-brand-primary bg-white text-brand-text text-lg outline-none transition-colors placeholder:text-gray-400"
                                     autoFocus

@@ -6,7 +6,8 @@
       "Read(//g/vibecoding/JAYEONBARAM/**)",
       "Bash(~/.local/bin/ag-skills)",
       "Bash(chmod +x ~/.local/bin/ag-skills)",
-      "Bash(ag-skills:*)"
+      "Bash(ag-skills:*)",
+      "Bash(find D:/vibecoding/JAYEONBARAM/src -type f -name *login* -o -type f -name *auth* -o -type f -name *register*)"
     ]
   }
 }

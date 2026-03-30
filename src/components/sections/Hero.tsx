@@ -18,7 +18,7 @@ const Hero = () => {
                 />
             </div>
 
-            <div className="relative z-20 text-center px-6 max-w-5xl mx-auto space-y-10">
+            <div className="relative z-20 text-center px-6 max-w-5xl mx-auto space-y-10 pt-24 md:pt-0">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -34,10 +34,10 @@ const Hero = () => {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 1, delay: 0.2 }}
-                        className="text-6xl md:text-9xl font-bold text-white font-serif tracking-tight leading-none"
+                        className="text-5xl md:text-9xl font-bold text-white font-sans tracking-tight leading-tight"
                     >
                         당신의 헤어에 <br />
-                        <span className="text-green-300 italic">자연의 리듬</span>을
+                        <span className="text-green-300">자연의 리듬</span>을
                     </motion.h1>
 
                     <motion.p
@@ -57,10 +57,6 @@ const Hero = () => {
                     transition={{ duration: 0.8, delay: 0.6 }}
                     className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-10"
                 >
-                    <button className="px-12 py-5 bg-white text-brand-primary rounded-2xl font-bold text-xl hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:-translate-y-1 transition-all flex items-center gap-3 group active:scale-95">
-                        컬렉션 보기
-                        <MoveRight size={22} className="group-hover:translate-x-2 transition-transform" />
-                    </button>
                     <button className="px-12 py-5 bg-transparent border-2 border-white/30 text-white rounded-2xl font-bold text-xl hover:bg-white/10 transition-all backdrop-blur-sm active:scale-95">
                         브랜드 스토리
                     </button>

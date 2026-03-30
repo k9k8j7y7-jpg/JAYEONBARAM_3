@@ -105,13 +105,13 @@ function LoginForm() {
         const currentUrl = window.location.origin + window.location.pathname;
         
         if (provider === 'Google') {
-            const clientId = 'YOUR_GOOGLE_CLIENT_ID'; 
+            const clientId = '214753280019-e4evt26r68b13f6dmikie5pt3keiec38.apps.googleusercontent.com';
             const scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
             const redirectUri = `${currentUrl}?provider=google`;
             
             window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline`;
         } else if (provider === 'Kakao') {
-            const clientId = 'YOUR_KAKAO_REST_API_KEY'; 
+            const clientId = 'ce0effd03ea10e1edb68f9eff21b47ae';
             const redirectUri = `${currentUrl}?provider=kakao`;
             
             window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;

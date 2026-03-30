@@ -92,3 +92,27 @@
 .animate-breeze {
   animation: fluid-breeze 10s ease-in-out infinite;
 }
+
+/* Google Translate Hide Banner and Tooltip UI */
+body {
+  top: 0 !important;
+}
+
+.skiptranslate iframe,
+.goog-te-banner-frame {
+  display: none !important;
+}
+
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#google_translate_element {
+  display: none !important;
+}

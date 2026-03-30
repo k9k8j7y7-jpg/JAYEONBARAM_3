@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         // 관리자 로그인 체크
-        if ($username === 'admin' && $password === 'jayeon1234!') {
+        if ($username === 'admin' && $password === 'admin1234!') {
             $_SESSION['admin_logged_in'] = true;
             header('Location: ../admin_products.php');
             exit;
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '아이디 또는 비밀번호가 틀렸습니다.';
         }
     } catch (PDOException $e) {
-        $error = '로그인 서버 오류: ' . $e.getMessage();
+        $error = '로그인 서버 오류: ' . $e->getMessage();
     }
 }
 ?>

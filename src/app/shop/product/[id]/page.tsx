@@ -15,7 +15,7 @@ export async function generateStaticParams() {
   } catch (error) {
     console.warn("Failed to generate static params, using dummy data for build:", error);
     // Return dummy IDs to allow the build to proceed and pages to be generated
-    return [1, 2, 3, 4, 5].map(id => ({ id: id.toString() }));
+    return Array.from({ length: 100 }, (_, i) => ({ id: (i + 1).toString() }));
   }
 }
 

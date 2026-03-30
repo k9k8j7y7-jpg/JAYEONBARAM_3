@@ -131,7 +131,7 @@ const ProductList = ({ categorySlug, categoryName }: ProductListProps) => {
                                 transition={{ delay: index * 0.1 }}
                                 className="group cursor-pointer relative"
                             >
-                                <Link href={`/shop/product/${product.id}`}>
+                                <Link href={`/shop/product/${product.id}/`}>
                                     <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-secondary mb-6 shadow-sm">
                                         <Image
                                             src={product.image_url || "/images/placeholder.jpg"}
