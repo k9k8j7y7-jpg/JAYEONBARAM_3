@@ -105,8 +105,5 @@ api/oauth_config.php
 *.7z
 *.rar
 
-# sql files
-*.sql
-
 # claude settings
 .claude/
